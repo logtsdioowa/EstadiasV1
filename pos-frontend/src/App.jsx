@@ -15,6 +15,7 @@ function App() {
           <Route path="inventario" element={<InventoryPage />} />
           <Route path="productos" element={<ProductsPage />} />
           <Route path="ventas" element={<SalesHistoryPage />} />
+          
         </Route>
       </Routes>
     </BrowserRouter>

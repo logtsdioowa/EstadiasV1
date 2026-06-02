@@ -7,6 +7,7 @@ function PosPage() {
   const [products, setProducts] = useState([]);
   const [beers, setBeers] = useState([]);
   const [bottleBases, setBottleBases] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState([]);
 
   const [cart, setCart] = useState(() => {
     const savedCart = localStorage.getItem("posCart");
@@ -21,11 +22,8 @@ function PosPage() {
     }
   });
 
-  const [paymentMethodId, setPaymentMethodId] = useState("1");
-  const [cashReceived, setCashReceived] = useState("");
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeCategory, setActiveCategory] = useState("Todas");
-
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -50,7 +48,12 @@ function PosPage() {
   }, [cart]);
 
   const loadInitialData = async () => {
-    await Promise.all([loadProducts(), loadBeers(), loadBottleBases()]);
+    await Promise.all([
+      loadProducts(),
+      loadBeers(),
+      loadBottleBases(),
+      loadPaymentMethods(),
+    ]);
   };
 
   const showToast = (message, type = "success") => {
@@ -80,18 +83,6 @@ function PosPage() {
     });
   };
 
-  const getTotal = () => {
-    return cart.reduce((total, item) => total + Number(item.subtotal || 0), 0);
-  };
-
-  const getCashReceived = () => {
-    return Number(cashReceived || 0);
-  };
-
-  const getChange = () => {
-    return getCashReceived() - getTotal();
-  };
-
   const loadProducts = async () => {
     try {
       const response = await api.get("/Products");
@@ -108,9 +99,7 @@ function PosPage() {
         trackInventory:
           product.trackInventory ?? product.TrackInventory ?? false,
         requiresBeerSelection:
-          product.requiresBeerSelection ??
-          product.RequiresBeerSelection ??
-          false,
+          product.requiresBeerSelection ?? product.RequiresBeerSelection ?? false,
         isBeer: product.isBeer ?? product.IsBeer ?? false,
         inventoryStatus:
           product.inventoryStatus ?? product.InventoryStatus ?? "NO_TRACK",
@@ -181,6 +170,28 @@ function PosPage() {
     }
   };
 
+  const loadPaymentMethods = async () => {
+    try {
+      const response = await api.get("/PaymentMethods");
+
+      const normalizedPaymentMethods = response.data.map((method) => ({
+        paymentMethodId: method.paymentMethodId ?? method.PaymentMethodId,
+        name: method.name ?? method.Name,
+      }));
+
+      setPaymentMethods(normalizedPaymentMethods);
+
+      if (normalizedPaymentMethods.length > 0) {
+        setSelectedPaymentMethodId((prev) =>
+          prev || normalizedPaymentMethods[0].paymentMethodId
+        );
+      }
+    } catch (error) {
+      console.error("Error al cargar métodos de pago:", error);
+      showToast("No se pudieron cargar los métodos de pago.", "error");
+    }
+  };
+
   const openBeerModal = (product) => {
     setBeerModal({
       isOpen: true,
@@ -210,11 +221,11 @@ function PosPage() {
   };
 
   const getRequiredBeerQuantity = (product) => {
-    if (product?.productType === "BEER_BUCKET") {
+    if (product.productType === "BEER_BUCKET") {
       return Number(product.inventoryMultiplier || 10);
     }
 
-    return Number(product?.inventoryMultiplier || 1);
+    return Number(product.inventoryMultiplier || 1);
   };
 
   const addPreparedDrinkToCart = (selectedBeer) => {
@@ -231,9 +242,8 @@ function PosPage() {
     }
 
     const requiredQuantity = getRequiredBeerQuantity(product);
-    const beerStock = Number(selectedBeer.stock || 0);
 
-    if (beerStock < requiredQuantity) {
+    if (Number(selectedBeer.stock || 0) < requiredQuantity) {
       showToast(
         `No hay suficiente stock de ${selectedBeer.name}. Se requieren ${requiredQuantity}.`,
         "warning"
@@ -241,7 +251,10 @@ function PosPage() {
       return;
     }
 
-    const maxQuantity = Math.floor(beerStock / requiredQuantity);
+    const maxQuantity = Math.floor(
+      Number(selectedBeer.stock || 0) / requiredQuantity
+    );
+
     const cartItemId = `${product.productId}-beer-${selectedBeer.productId}`;
 
     setCart((prevCart) => {
@@ -282,18 +295,14 @@ function PosPage() {
           quantity: 1,
           unitPrice: Number(product.price || 0),
           subtotal: Number(product.price || 0),
-
           trackInventory: false,
           stock: maxQuantity,
-
           requiresBeerSelection: true,
           selectedBeerProductId: selectedBeer.productId,
           selectedBeerName: selectedBeer.name,
           selectedBeerStock: selectedBeer.stock,
-
           selectedBottleProductId: null,
           selectedBottleName: null,
-
           productType: product.productType,
           inventoryMultiplier: requiredQuantity,
         },
@@ -382,18 +391,14 @@ function PosPage() {
           quantity: 1,
           unitPrice: Number(product.price || 0),
           subtotal: Number(product.price || 0),
-
           trackInventory: false,
           stock: maxQuantity,
-
           requiresBeerSelection: false,
           selectedBeerProductId: null,
           selectedBeerName: null,
-
           selectedBottleProductId: selectedBottle.productId,
           selectedBottleName: selectedBottle.name,
           selectedBottleStock: selectedBottle.stock,
-
           productType: product.productType,
           servingVolumeMl,
           bottleVolumeMl,
@@ -457,17 +462,13 @@ function PosPage() {
           quantity: 1,
           unitPrice: Number(product.price || 0),
           subtotal: Number(product.price || 0),
-
           trackInventory: product.trackInventory,
           stock: product.stock,
-
           requiresBeerSelection: false,
           selectedBeerProductId: null,
           selectedBeerName: null,
-
           selectedBottleProductId: null,
           selectedBottleName: null,
-
           productType: product.productType,
           inventoryMultiplier: product.inventoryMultiplier || 1,
         },
@@ -486,8 +487,7 @@ function PosPage() {
 
         if (item.selectedBeerProductId) {
           const selectedBeer = beers.find(
-            (beer) =>
-              Number(beer.productId) === Number(item.selectedBeerProductId)
+            (beer) => Number(beer.productId) === Number(item.selectedBeerProductId)
           );
 
           if (!selectedBeer) {
@@ -593,7 +593,6 @@ function PosPage() {
     });
 
     setCart([]);
-    setCashReceived("");
   };
 
   const onAddTableCharge = (tableCharge) => {
@@ -629,8 +628,7 @@ function PosPage() {
       .map((item) => {
         if (item.selectedBeerProductId) {
           const selectedBeer = beers.find(
-            (beer) =>
-              Number(beer.productId) === Number(item.selectedBeerProductId)
+            (beer) => Number(beer.productId) === Number(item.selectedBeerProductId)
           );
 
           if (!selectedBeer) {
@@ -752,19 +750,14 @@ function PosPage() {
     return cleanedCart;
   };
 
-  const confirmSale = () => {
+  const confirmSale = async () => {
     if (cart.length === 0) {
       showToast("El carrito está vacío.", "warning");
       return;
     }
 
-    if (!paymentMethodId) {
+    if (!selectedPaymentMethodId) {
       showToast("Selecciona un método de pago.", "warning");
-      return;
-    }
-
-    if (Number(paymentMethodId) === 1 && getCashReceived() < getTotal()) {
-      showToast("El efectivo recibido no cubre el total.", "warning");
       return;
     }
 
@@ -785,7 +778,7 @@ function PosPage() {
 
       const payload = {
         userId: 1,
-        paymentMethodId: Number(paymentMethodId),
+        paymentMethodId: Number(selectedPaymentMethodId),
         details: cleanedCart.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -818,29 +811,22 @@ function PosPage() {
     }
   };
 
+  const cartTotal = useMemo(() => {
+    return cart.reduce((total, item) => total + Number(item.subtotal || 0), 0);
+  }, [cart]);
+
   const filteredProducts = useMemo(() => {
     const normalizedSearch = searchTerm.toLowerCase().trim();
 
+    if (!normalizedSearch) return products;
+
     return products.filter((product) => {
-      const matchesSearch =
-        !normalizedSearch ||
+      return (
         product.name.toLowerCase().includes(normalizedSearch) ||
-        (product.category || "").toLowerCase().includes(normalizedSearch);
-
-      const matchesCategory =
-        activeCategory === "Todas" || product.category === activeCategory;
-
-      return matchesSearch && matchesCategory;
+        (product.category || "").toLowerCase().includes(normalizedSearch)
+      );
     });
-  }, [products, searchTerm, activeCategory]);
-
-  const categories = useMemo(() => {
-    const uniqueCategories = Array.from(
-      new Set(products.map((product) => product.category || "Sin categoría"))
-    );
-
-    return ["Todas", ...uniqueCategories.sort((a, b) => a.localeCompare(b))];
-  }, [products]);
+  }, [products, searchTerm]);
 
   const categoryPriority = [
     "Cervezas",
@@ -887,252 +873,230 @@ function PosPage() {
   );
 
   return (
-    <div className="pos-with-tables-layout">
-      {toast && (
-        <div className={`toast toast-${toast.type}`}>{toast.message}</div>
-      )}
+    <div className="pos-page">
+      <header className="pos-logo-bar">
+        <img
+          className="pos-logo-image"
+          src="/nuevo-ejido-logo.jpg"
+          alt="Club Deportivo Billar El Nuevo Ejido"
+        />
+      </header>
 
-      {confirmSaleModal && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <h2>Confirmar venta</h2>
+      <div className="pos-layout">
+        {toast && (
+          <div className={`toast toast-${toast.type}`}>{toast.message}</div>
+        )}
 
-            <p>
-              Total a cobrar: <strong>{formatCurrency(getTotal())}</strong>
-            </p>
+        {confirmSaleModal && (
+          <div className="modal-overlay">
+            <div className="modal-box">
+              <h2>Confirmar venta</h2>
 
-            {Number(paymentMethodId) === 1 && (
-              <>
-                <p>
-                  Efectivo recibido:{" "}
-                  <strong>{formatCurrency(getCashReceived())}</strong>
-                </p>
+              <p>
+                Total a cobrar: <strong>{formatCurrency(cartTotal)}</strong>
+              </p>
 
-                <p>
-                  Cambio:{" "}
-                  <strong>
-                    {formatCurrency(getChange() > 0 ? getChange() : 0)}
-                  </strong>
-                </p>
-              </>
-            )}
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="modal-cancel-button"
+                  onClick={() => setConfirmSaleModal(false)}
+                  disabled={loading}
+                >
+                  Cancelar
+                </button>
 
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="modal-cancel-button"
-                onClick={() => setConfirmSaleModal(false)}
-                disabled={loading}
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                className="modal-confirm-button"
-                onClick={processSale}
-                disabled={loading}
-              >
-                {loading ? "Procesando..." : "Cobrar"}
-              </button>
+                <button
+                  type="button"
+                  className="modal-confirm-button"
+                  onClick={processSale}
+                  disabled={loading}
+                >
+                  {loading ? "Procesando..." : "Cobrar"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {beerModal.isOpen && (
-        <div className="modal-overlay">
-          <div className="selector-modal-box">
-            <div className="selector-modal-header">
-              <div>
-                <h2>
-                  {beerModal.product?.productType === "BEER_BUCKET"
-                    ? "Seleccionar cerveza para cubeta"
-                    : "Seleccionar cerveza"}
-                </h2>
+        {beerModal.isOpen && (
+          <div className="modal-overlay">
+            <div className="beer-selector-modal">
+              <div className="beer-selector-header">
+                <div>
+                  <h2>
+                    {beerModal.product?.productType === "BEER_BUCKET"
+                      ? "Seleccionar cerveza para cubeta"
+                      : "Seleccionar cerveza"}
+                  </h2>
 
-                <p>
-                  {beerModal.product?.productType === "BEER_BUCKET"
-                    ? "La cubeta descontará 10 unidades de la cerveza seleccionada."
-                    : "La bebida descontará 1 unidad de la cerveza seleccionada."}
-                </p>
+                  <p>
+                    {beerModal.product?.productType === "BEER_BUCKET"
+                      ? "La cubeta descontará 10 unidades de la cerveza seleccionada."
+                      : "La bebida descontará 1 unidad de la cerveza seleccionada."}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="modal-close-button"
+                  onClick={closeBeerModal}
+                >
+                  ×
+                </button>
               </div>
 
-              <button
-                type="button"
-                className="modal-close-button"
-                onClick={closeBeerModal}
-              >
-                ×
-              </button>
+              {beers.length === 0 ? (
+                <p>No hay cervezas disponibles.</p>
+              ) : (
+                <div className="beer-card-grid">
+                  {beers.map((beer) => {
+                    const requiredQuantity = getRequiredBeerQuantity(
+                      beerModal.product
+                    );
+
+                    const hasEnoughStock =
+                      Number(beer.stock || 0) >= requiredQuantity;
+
+                    const availableSales = Math.floor(
+                      Number(beer.stock || 0) / requiredQuantity
+                    );
+
+                    return (
+                      <button
+                        type="button"
+                        className={`beer-select-card ${
+                          !hasEnoughStock ? "beer-select-card-disabled" : ""
+                        }`}
+                        key={beer.productId}
+                        disabled={!hasEnoughStock}
+                        onClick={() => addPreparedDrinkToCart(beer)}
+                      >
+                        <div className="beer-select-image">
+                          {beer.imageUrl ? (
+                            <img src={beer.imageUrl} alt={beer.name} />
+                          ) : (
+                            <span>Sin imagen</span>
+                          )}
+                        </div>
+
+                        <div className="beer-select-info">
+                          <strong>{beer.name}</strong>
+                          <span>Stock: {Number(beer.stock || 0)}</span>
+                          <span>Disponible para: {availableSales} venta(s)</span>
+
+                          {!hasEnoughStock && <em>Stock insuficiente</em>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-
-            {beers.length === 0 ? (
-              <p>No hay cervezas disponibles.</p>
-            ) : (
-              <div className="selector-card-grid">
-                {beers.map((beer) => {
-                  const requiredQuantity = getRequiredBeerQuantity(
-                    beerModal.product
-                  );
-
-                  const availableSales = Math.floor(
-                    Number(beer.stock || 0) / requiredQuantity
-                  );
-
-                  const hasEnoughStock = availableSales > 0;
-
-                  return (
-                    <button
-                      type="button"
-                      className={`selector-product-card ${
-                        !hasEnoughStock ? "beer-select-card-disabled" : ""
-                      }`}
-                      key={beer.productId}
-                      disabled={!hasEnoughStock}
-                      onClick={() => addPreparedDrinkToCart(beer)}
-                    >
-                      <div className="selector-product-image">
-                        {beer.imageUrl ? (
-                          <img src={beer.imageUrl} alt={beer.name} />
-                        ) : (
-                          <span>Sin imagen</span>
-                        )}
-                      </div>
-
-                      <div className="selector-product-info">
-                        <strong>{beer.name}</strong>
-                        <span>Stock: {Number(beer.stock || 0)}</span>
-                        <span>Disponible: {availableSales} venta(s)</span>
-
-                        {!hasEnoughStock && <span>Stock insuficiente</span>}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {bottleModal.isOpen && (
-        <div className="modal-overlay">
-          <div className="selector-modal-box">
-            <div className="selector-modal-header">
-              <div>
-                <h2>Seleccionar botella</h2>
+        {bottleModal.isOpen && (
+          <div className="modal-overlay">
+            <div className="beer-selector-modal">
+              <div className="beer-selector-header">
+                <div>
+                  <h2>Seleccionar botella</h2>
 
-                <p>
-                  {bottleModal.product?.name} usa{" "}
-                  <strong>
-                    {Number(bottleModal.product?.servingVolumeMl || 0)} ml
-                  </strong>{" "}
-                  por venta.
-                </p>
+                  <p>
+                    {bottleModal.product?.name} usa{" "}
+                    <strong>
+                      {Number(bottleModal.product?.servingVolumeMl || 0)} ml
+                    </strong>{" "}
+                    por venta.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="modal-close-button"
+                  onClick={closeBottleModal}
+                >
+                  ×
+                </button>
               </div>
 
-              <button
-                type="button"
-                className="modal-close-button"
-                onClick={closeBottleModal}
-              >
-                ×
-              </button>
+              {bottleBases.length === 0 ? (
+                <p>No hay botellas disponibles.</p>
+              ) : (
+                <div className="beer-card-grid">
+                  {bottleBases.map((bottle) => {
+                    const servingVolumeMl = Number(
+                      bottleModal.product?.servingVolumeMl || 0
+                    );
+
+                    const bottleVolumeMl = Number(bottle.bottleVolumeMl || 0);
+                    const bottleStock = Number(bottle.stock || 0);
+
+                    const requiredBottleAmount =
+                      bottleVolumeMl > 0 ? servingVolumeMl / bottleVolumeMl : 0;
+
+                    const maxSales =
+                      requiredBottleAmount > 0
+                        ? Math.floor(bottleStock / requiredBottleAmount)
+                        : 0;
+
+                    const hasEnoughStock = maxSales > 0;
+
+                    return (
+                      <button
+                        type="button"
+                        className={`beer-select-card ${
+                          !hasEnoughStock ? "beer-select-card-disabled" : ""
+                        }`}
+                        key={bottle.productId}
+                        disabled={!hasEnoughStock}
+                        onClick={() => addLiquorProductToCart(bottle)}
+                      >
+                        <div className="beer-select-image">
+                          {bottle.imageUrl ? (
+                            <img src={bottle.imageUrl} alt={bottle.name} />
+                          ) : (
+                            <span>Sin imagen</span>
+                          )}
+                        </div>
+
+                        <div className="beer-select-info">
+                          <strong>{bottle.name}</strong>
+                          <span>{Number(bottle.bottleVolumeMl || 0)} ml</span>
+                          <span>
+                            Stock: {Number(bottle.stock || 0).toFixed(2)} botella(s)
+                          </span>
+                          <span>Disponible para: {maxSales} venta(s)</span>
+
+                          {!hasEnoughStock && <em>Stock insuficiente</em>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-
-            {bottleBases.length === 0 ? (
-              <p>No hay botellas disponibles.</p>
-            ) : (
-              <div className="selector-card-grid">
-                {bottleBases.map((bottle) => {
-                  const servingVolumeMl = Number(
-                    bottleModal.product?.servingVolumeMl || 0
-                  );
-
-                  const bottleVolumeMl = Number(bottle.bottleVolumeMl || 0);
-                  const bottleStock = Number(bottle.stock || 0);
-
-                  const requiredBottleAmount =
-                    bottleVolumeMl > 0 ? servingVolumeMl / bottleVolumeMl : 0;
-
-                  const maxSales =
-                    requiredBottleAmount > 0
-                      ? Math.floor(bottleStock / requiredBottleAmount)
-                      : 0;
-
-                  const hasEnoughStock = maxSales > 0;
-
-                  return (
-                    <button
-                      type="button"
-                      className={`selector-product-card ${
-                        !hasEnoughStock ? "beer-select-card-disabled" : ""
-                      }`}
-                      key={bottle.productId}
-                      disabled={!hasEnoughStock}
-                      onClick={() => addLiquorProductToCart(bottle)}
-                    >
-                      <div className="selector-product-image">
-                        {bottle.imageUrl ? (
-                          <img src={bottle.imageUrl} alt={bottle.name} />
-                        ) : (
-                          <span>Sin imagen</span>
-                        )}
-                      </div>
-
-                      <div className="selector-product-info">
-                        <strong>{bottle.name}</strong>
-                        <span>{Number(bottle.bottleVolumeMl || 0)} ml</span>
-                        <span>
-                          Stock: {Number(bottle.stock || 0).toFixed(2)} botella(s)
-                        </span>
-                        <span>Disponible: {maxSales} venta(s)</span>
-
-                        {!hasEnoughStock && <span>Stock insuficiente</span>}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
-        </div>
-      )}
+        )}
 
-      <TablesSidebar
-        onAddTableCharge={onAddTableCharge}
-        tableRentalProduct={tableRentalProduct}
-        onNotify={showToast}
-      />
+        <TablesSidebar
+          onAddTableCharge={onAddTableCharge}
+          tableRentalProduct={tableRentalProduct}
+          onNotify={showToast}
+        />
 
-      <div className="pos-container">
-        <main className="products-section">
+        <main className="pos-main">
           <div className="pos-header">
             <h1>Punto de venta</h1>
 
-            <div className="header-actions">
-              <input
-                type="text"
-                className="pos-search"
-                placeholder="Buscar producto..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="category-filter">
-            {categories.map((category) => (
-              <button
-                type="button"
-                key={category}
-                className={activeCategory === category ? "active-category" : ""}
-                onClick={() => setActiveCategory(category)}
-              >
-                {category}
-              </button>
-            ))}
+            <input
+              type="text"
+              className="pos-search"
+              placeholder="Buscar producto..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
 
           {orderedCategoryNames.length === 0 ? (
@@ -1143,9 +1107,7 @@ function PosPage() {
                 <section className="product-category-section" key={categoryName}>
                   <div className="product-category-header">
                     <h2>{categoryName}</h2>
-                    <span>
-                      {groupedProducts[categoryName].length} producto(s)
-                    </span>
+                    <span>{groupedProducts[categoryName].length} producto(s)</span>
                   </div>
 
                   <div className="products-grid">
@@ -1163,145 +1125,96 @@ function PosPage() {
           )}
         </main>
 
-        <aside className="cart-section">
-          <div className="cart">
-            <h2>Carrito</h2>
+        <aside className="cart-sidebar">
+          <h2>Carrito</h2>
 
-            {cart.length === 0 ? (
-              <p>No hay productos agregados.</p>
-            ) : (
-              <>
-                {cart.map((item) => (
-                  <div className="cart-item" key={item.cartItemId}>
+          {cart.length === 0 ? (
+            <p className="empty-cart-text">No hay productos agregados.</p>
+          ) : (
+            <div className="cart-items">
+              {cart.map((item) => (
+                <div className="cart-item" key={item.cartItemId}>
+                  <div className="cart-item-header">
                     <strong>{item.name}</strong>
 
-                    <p>Precio: {formatCurrency(item.unitPrice)}</p>
-                    <p>Subtotal: {formatCurrency(item.subtotal)}</p>
-
-                    {item.selectedBeerName && (
-                      <p className="cart-extra-info">
-                        Cerveza: {item.selectedBeerName}
-                      </p>
-                    )}
-
-                    {item.selectedBottleName && (
-                      <p className="cart-extra-info">
-                        Botella: {item.selectedBottleName}
-                      </p>
-                    )}
-
-                    {item.rentalTimeLabel && (
-                      <p className="cart-extra-info">
-                        Tiempo: {item.rentalTimeLabel}
-                      </p>
-                    )}
-
-                    <div className="cart-actions">
-                      <button
-                        type="button"
-                        onClick={() => decreaseQuantity(item.cartItemId)}
-                      >
-                        −
-                      </button>
-
-                      <button type="button" disabled>
-                        {item.quantity}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => increaseQuantity(item.cartItemId)}
-                      >
-                        +
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => removeFromCart(item.cartItemId)}
-                      >
-                        Quitar
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className="cart-remove-button"
+                      onClick={() => removeFromCart(item.cartItemId)}
+                    >
+                      ×
+                    </button>
                   </div>
-                ))}
 
-                <div className="cart-total">
-                  <span>Total</span>
-                  <strong>{formatCurrency(getTotal())}</strong>
-                </div>
-
-                <div className="payment-section">
-                  <label>Método de pago</label>
-
-                  <select
-                    value={paymentMethodId}
-                    onChange={(e) => {
-                      setPaymentMethodId(e.target.value);
-                      setCashReceived("");
-                    }}
-                  >
-                    <option value="1">Efectivo</option>
-                    <option value="2">Tarjeta</option>
-                    <option value="3">Transferencia</option>
-                  </select>
-                </div>
-
-                {Number(paymentMethodId) === 1 && (
-                  <div className="cash-section">
-                    <label>Efectivo recibido</label>
-
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={cashReceived}
-                      onChange={(e) => setCashReceived(e.target.value)}
-                      placeholder="Ingrese efectivo recibido"
-                    />
-
-                    <div className="change-box">
-                      <p>Total: {formatCurrency(getTotal())}</p>
-                      <p>
-                        Efectivo recibido: {formatCurrency(getCashReceived())}
-                      </p>
-
-                      <h3
-                        className={
-                          getChange() < 0 ? "negative-change" : "positive-change"
-                        }
-                      >
-                        Cambio:{" "}
-                        {formatCurrency(getChange() > 0 ? getChange() : 0)}
-                      </h3>
-                    </div>
+                  <div className="cart-item-meta">
+                    <span>{formatCurrency(item.unitPrice)}</span>
+                    <span>Subtotal: {formatCurrency(item.subtotal)}</span>
                   </div>
-                )}
 
-                <button
-                  type="button"
-                  className="charge-button"
-                  onClick={confirmSale}
-                  disabled={
-                    loading ||
-                    cart.length === 0 ||
-                    (Number(paymentMethodId) === 1 &&
-                      getCashReceived() < getTotal())
-                  }
-                >
-                  {loading ? "Registrando..." : `Cobrar ${formatCurrency(getTotal())}`}
-                </button>
+                  <div className="cart-quantity-controls">
+                    <button
+                      type="button"
+                      onClick={() => decreaseQuantity(item.cartItemId)}
+                    >
+                      −
+                    </button>
 
-                <button
-                  type="button"
-                  className="charge-button"
-                  onClick={clearCart}
-                  disabled={cart.length === 0 || loading}
-                >
-                  Vaciar carrito
-                </button>
-              </>
-            )}
+                    <span>{item.quantity}</span>
+
+                    <button
+                      type="button"
+                      onClick={() => increaseQuantity(item.cartItemId)}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="cart-total">
+            <span>Total</span>
+            <strong>{formatCurrency(cartTotal)}</strong>
           </div>
+
+          <div className="payment-box">
+            <label>Método de pago</label>
+
+            <select
+              value={selectedPaymentMethodId}
+              onChange={(e) => setSelectedPaymentMethodId(e.target.value)}
+            >
+              <option value="">Selecciona método</option>
+
+              {paymentMethods.map((method) => (
+                <option
+                  key={method.paymentMethodId}
+                  value={method.paymentMethodId}
+                >
+                  {method.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="button"
+            className="checkout-button"
+            onClick={confirmSale}
+            disabled={cart.length === 0 || loading}
+          >
+            Cobrar
+          </button>
+
+          <button
+            type="button"
+            className="clear-cart-button"
+            onClick={clearCart}
+            disabled={cart.length === 0 || loading}
+          >
+            Vaciar carrito
+          </button>
         </aside>
       </div>
     </div>

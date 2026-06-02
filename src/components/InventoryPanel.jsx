@@ -1,182 +1,115 @@
-function InventoryPanel({ inventory, onRestock, onAdjust }) {
-  const visibleInventory = inventory.filter((item) => {
-    return item.productType !== "INVENTORY_BASE";
+import { useEffect, useMemo, useState } from "react";
+import api from "../services/api";
+
+function InventoryPanel() {
+  const [inventory, setInventory] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const [stockModal, setStockModal] = useState({
+    isOpen: false,
+    product: null,
+    stock: "",
+    minStock: "",
   });
 
-  const outOfStock = visibleInventory.filter(
-    (item) => item.inventoryStatus === "OUT_OF_STOCK"
-  );
+  useEffect(() => {
+    loadInventory();
+  }, []);
 
-  const lowStock = visibleInventory.filter(
-    (item) => item.inventoryStatus === "LOW_STOCK"
-  );
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
 
-  const categoryPriority = [
-    "Cervezas",
-    "Bebidas preparadas",
-    "Shots",
-    "Bebidas embotelladas",
-    "Snacks",
-    "Cigarros",
-    "Botellas",
-    "Otros",
-    "Sin categoría",
-  ];
-
-  const getNormalizedText = (value) => {
-    return (value || "").toString().toLowerCase().trim();
+    setTimeout(() => {
+      setToast(null);
+    }, 2500);
   };
 
-  const isDerivedProduct = (item) => {
-    return Boolean(
-      item.inventorySourceProductId && item.inventorySourceProductId !== ""
-    );
+  const normalizeProduct = (product) => ({
+    productId: product.productId ?? product.ProductId,
+    name: product.name ?? product.Name,
+    category: product.category ?? product.Category ?? "Sin categoría",
+    productType: product.productType ?? product.ProductType ?? "",
+    stock: product.stock ?? product.Stock ?? 0,
+    minStock: product.minStock ?? product.MinStock ?? 0,
+    baseStock: product.baseStock ?? product.BaseStock ?? null,
+    trackInventory: product.trackInventory ?? product.TrackInventory ?? false,
+    inventoryStatus:
+      product.inventoryStatus ?? product.InventoryStatus ?? "NO_TRACK",
+    imageUrl: product.imageUrl ?? product.ImageUrl ?? "",
+    bottleVolumeMl: product.bottleVolumeMl ?? product.BottleVolumeMl ?? null,
+    servingVolumeMl: product.servingVolumeMl ?? product.ServingVolumeMl ?? null,
+    updatedAt: product.updatedAt ?? product.UpdatedAt ?? null,
+    lastRestockAt: product.lastRestockAt ?? product.LastRestockAt ?? null,
+  });
+
+  const loadInventory = async () => {
+    try {
+      setLoading(true);
+
+      const response = await api.get("/Products/Inventory");
+
+      const normalizedInventory = (response.data || []).map(normalizeProduct);
+
+      setInventory(normalizedInventory);
+    } catch (error) {
+      console.error("Error al cargar inventario:", error);
+      showToast("No se pudo cargar el inventario.", "error");
+      setInventory([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const isBottle = (item) => {
-    return item.productType === "BOTTLE";
+  const openStockModal = (product) => {
+    setStockModal({
+      isOpen: true,
+      product,
+      stock: product.stock ?? 0,
+      minStock: product.minStock ?? 0,
+    });
   };
 
-  const isShot = (item) => {
-    return item.productType === "SHOT";
+  const closeStockModal = () => {
+    setStockModal({
+      isOpen: false,
+      product: null,
+      stock: "",
+      minStock: "",
+    });
   };
 
-  const isLiquorDrink = (item) => {
-    return item.productType === "LIQUOR_DRINK";
+  const saveStock = async () => {
+    if (!stockModal.product) return;
+
+    const productId = stockModal.product.productId;
+
+    const payload = {
+      stock: Number(stockModal.stock || 0),
+      minStock: Number(stockModal.minStock || 0),
+    };
+
+    try {
+      setLoading(true);
+
+      await api.put(`/Products/${productId}/Stock`, payload);
+
+      showToast("Inventario actualizado correctamente.", "success");
+
+      closeStockModal();
+      await loadInventory();
+    } catch (error) {
+      console.error("Error al actualizar inventario:", error);
+      showToast("No se pudo actualizar el inventario.", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const isCigaretteUnit = (item) => {
-    return item.productType === "CIGARETTE_UNIT";
-  };
-
-  const isBeerPreparedDrink = (item) => {
-    return item.productType === "PREPARED_DRINK";
-  };
-
-  const isBeerBucket = (item) => {
-    return item.productType === "BEER_BUCKET";
-  };
-
-  const isService = (item) => {
-    return item.productType === "SERVICE";
-  };
-
-  const isCigarettePack = (item) => {
-    const name = getNormalizedText(item.name);
-    const category = getNormalizedText(item.category);
-
-    return (
-      item.productType === "PACK" &&
-      (name.includes("cajetilla") || category.includes("cigarro"))
-    );
-  };
-
-  const canEditInventory = (item) => {
-    const derived = isDerivedProduct(item);
-
-    if (isBottle(item)) return true;
-    if (isCigarettePack(item)) return true;
-
-    if (isShot(item)) return false;
-    if (isLiquorDrink(item)) return false;
-    if (isCigaretteUnit(item)) return false;
-    if (isBeerPreparedDrink(item)) return false;
-    if (isBeerBucket(item)) return false;
-    if (isService(item)) return false;
-
-    if (derived) return false;
-
-    return Boolean(item.trackInventory);
-  };
-
-  const getInventoryNote = (item) => {
-    if (isBottle(item)) {
-      return "Se ajusta como botella";
-    }
-
-    if (isCigarettePack(item)) {
-      return "Se ajusta como cajetilla";
-    }
-
-    if (isCigaretteUnit(item)) {
-      return "Descuenta de cajetilla";
-    }
-
-    if (isShot(item)) {
-      return "Descuenta de botella";
-    }
-
-    if (isLiquorDrink(item)) {
-      return "Descuenta de botella";
-    }
-
-    if (isBeerPreparedDrink(item)) {
-      return "Descuenta cerveza al vender";
-    }
-
-    if (isBeerBucket(item)) {
-      return "Descuenta 10 cervezas";
-    }
-
-    if (isDerivedProduct(item)) {
-      return "Descuenta de inventario base";
-    }
-
-    return "";
-  };
-
-  const getStockLabel = (item) => {
-    const stock = Number(item.stock || 0);
-
-    if (isBottle(item)) {
-      return `${stock.toFixed(2)} botella(s)`;
-    }
-
-    if (isCigarettePack(item)) {
-      return `${Math.floor(stock)} cajetilla(s)`;
-    }
-
-    if (isCigaretteUnit(item)) {
-      return `${Math.floor(stock)} cigarro(s)`;
-    }
-
-    if (isShot(item)) {
-      return `${Math.floor(stock)} shot(s)`;
-    }
-
-    if (isLiquorDrink(item)) {
-      return `${Math.floor(stock)} bebida(s)`;
-    }
-
-    return Number.isInteger(stock) ? String(stock) : stock.toFixed(2);
-  };
-
-  const getBaseStockLabel = (item) => {
-    if (!isDerivedProduct(item)) return "";
-
-    const baseStock = Number(item.baseStock || 0);
-
-    if (isShot(item) || isLiquorDrink(item) || isBottle(item)) {
-      return `Base: ${baseStock.toFixed(2)} botella(s)`;
-    }
-
-    if (isCigarettePack(item) || isCigaretteUnit(item)) {
-      return `Base: ${baseStock.toFixed(2)} cajetilla(s)`;
-    }
-
-    return `Base: ${baseStock.toFixed(2)} unidad(es)`;
-  };
-
-  const formatLastRestockDate = (value) => {
+  const formatDate = (value) => {
     if (!value) return "Sin registro";
 
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return "Sin registro";
-    }
-
-    return date.toLocaleString("es-MX", {
+    return new Date(value).toLocaleString("es-MX", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -185,166 +118,268 @@ function InventoryPanel({ inventory, onRestock, onAdjust }) {
     });
   };
 
-  const renderInventoryStatus = (status) => {
-    if (status === "OUT_OF_STOCK") {
-      return <span className="stock-badge out-stock">Agotado</span>;
+  const getStatusLabel = (product) => {
+    if (!product.trackInventory) {
+      return {
+        text: "No controlado",
+        className: "no-track",
+      };
     }
 
-    if (status === "LOW_STOCK") {
-      return <span className="stock-badge low-stock">Stock bajo</span>;
+    const stock = Number(product.stock || 0);
+    const minStock = Number(product.minStock || 0);
+
+    if (stock <= 0) {
+      return {
+        text: "Agotado",
+        className: "out-stock",
+      };
     }
 
-    if (status === "OK") {
-      return <span className="stock-badge stock-ok">OK</span>;
+    if (stock <= minStock) {
+      return {
+        text: "Stock bajo",
+        className: "low-stock",
+      };
     }
 
-    return <span className="stock-badge no-track">Sin control</span>;
+    return {
+      text: "Disponible",
+      className: "stock-ok",
+    };
   };
 
-  const groupedInventory = visibleInventory.reduce((groups, item) => {
-    const categoryName = item.category || "Sin categoría";
+  const summary = useMemo(() => {
+    const trackedProducts = inventory.filter((item) => item.trackInventory);
 
-    if (!groups[categoryName]) {
-      groups[categoryName] = [];
-    }
+    return {
+      total: trackedProducts.length,
+      out: trackedProducts.filter((item) => Number(item.stock || 0) <= 0)
+        .length,
+      low: trackedProducts.filter(
+        (item) =>
+          Number(item.stock || 0) > 0 &&
+          Number(item.stock || 0) <= Number(item.minStock || 0)
+      ).length,
+      ok: trackedProducts.filter(
+        (item) => Number(item.stock || 0) > Number(item.minStock || 0)
+      ).length,
+    };
+  }, [inventory]);
 
-    groups[categoryName].push(item);
+  const groupedInventory = useMemo(() => {
+    return inventory.reduce((groups, product) => {
+      const category = product.category || "Sin categoría";
 
-    return groups;
-  }, {});
+      if (!groups[category]) {
+        groups[category] = [];
+      }
 
-  const orderedCategoryNames = Object.keys(groupedInventory).sort((a, b) => {
-    const indexA = categoryPriority.indexOf(a);
-    const indexB = categoryPriority.indexOf(b);
+      groups[category].push(product);
 
-    const priorityA = indexA === -1 ? 999 : indexA;
-    const priorityB = indexB === -1 ? 999 : indexB;
+      return groups;
+    }, {});
+  }, [inventory]);
 
-    if (priorityA !== priorityB) {
-      return priorityA - priorityB;
-    }
-
-    return a.localeCompare(b);
-  });
+  const categoryNames = Object.keys(groupedInventory).sort((a, b) =>
+    a.localeCompare(b)
+  );
 
   return (
-    <div className="inventory-panel">
-      <h2>Inventario</h2>
+    <section className="inventory-panel">
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>{toast.message}</div>
+      )}
 
-      <div className="inventory-summary">
-        <div className="inventory-alert-card out">
-          <strong>Agotados</strong>
-          <span>{outOfStock.length}</span>
+      <div className="page-card">
+        <div className="sales-history-header">
+          <div>
+            <h2>Inventario</h2>
+            <p>Consulta y actualiza las existencias registradas.</p>
+          </div>
+
+          <button
+            type="button"
+            className="history-button"
+            onClick={loadInventory}
+            disabled={loading}
+          >
+            {loading ? "Cargando..." : "Actualizar"}
+          </button>
         </div>
 
-        <div className="inventory-alert-card low">
-          <strong>Stock bajo</strong>
-          <span>{lowStock.length}</span>
+        <div className="inventory-summary">
+          <div className="inventory-alert-card ok">
+            <small>Disponibles</small>
+            <span>{summary.ok}</span>
+          </div>
+
+          <div className="inventory-alert-card low">
+            <small>Stock bajo</small>
+            <span>{summary.low}</span>
+          </div>
+
+          <div className="inventory-alert-card out">
+            <small>Agotados</small>
+            <span>{summary.out}</span>
+          </div>
         </div>
 
-        <div className="inventory-alert-card ok">
-          <strong>Productos controlados</strong>
-          <span>{visibleInventory.length}</span>
-        </div>
+        {loading && inventory.length === 0 ? (
+          <p>Cargando inventario...</p>
+        ) : categoryNames.length === 0 ? (
+          <p>No hay productos en inventario.</p>
+        ) : (
+          <div className="inventory-category-sections">
+            {categoryNames.map((category) => (
+              <section className="inventory-category-section" key={category}>
+                <div className="product-category-header">
+                  <h2>{category}</h2>
+                  <span>{groupedInventory[category].length} producto(s)</span>
+                </div>
+
+                <div className="inventory-table-wrapper">
+                  <table className="sale-detail-table">
+                    <thead>
+                      <tr>
+                        <th>Imagen</th>
+                        <th>Producto</th>
+                        <th>Existencia</th>
+                        <th>Mínimo</th>
+                        <th>Estado</th>
+                        <th>Último relleno</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {groupedInventory[category].map((product) => {
+                        const status = getStatusLabel(product);
+
+                        return (
+                          <tr key={product.productId}>
+                            <td>
+                              <div className="inventory-product-image">
+                                {product.imageUrl ? (
+                                  <img
+                                    src={product.imageUrl}
+                                    alt={product.name}
+                                  />
+                                ) : (
+                                  <span>Sin imagen</span>
+                                )}
+                              </div>
+                            </td>
+
+                            <td>
+                              <strong>{product.name}</strong>
+                              <br />
+                              <small>{product.productType}</small>
+                            </td>
+
+                            <td>{Number(product.stock || 0).toFixed(2)}</td>
+
+                            <td>{Number(product.minStock || 0).toFixed(2)}</td>
+
+                            <td>
+                              <span className={`stock-badge ${status.className}`}>
+                                {status.text}
+                              </span>
+                            </td>
+
+                            <td>
+                              {formatDate(
+                                product.lastRestockAt || product.updatedAt
+                              )}
+                            </td>
+
+                            <td>
+                              <div className="inventory-actions">
+                                <button
+                                  type="button"
+                                  onClick={() => openStockModal(product)}
+                                >
+                                  Editar
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
       </div>
 
-      {visibleInventory.length === 0 ? (
-        <p>No hay productos con control de inventario.</p>
-      ) : (
-        <div className="inventory-category-sections">
-          {orderedCategoryNames.map((categoryName) => (
-            <section className="inventory-category-section" key={categoryName}>
-              <div className="product-category-header">
-                <h2>{categoryName}</h2>
-                <span>
-                  {groupedInventory[categoryName].length} producto(s)
-                </span>
-              </div>
+      {stockModal.isOpen && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <h2>Actualizar inventario</h2>
 
-              <div className="inventory-table-wrapper">
-                <table className="inventory-table">
-                  <thead>
-                    <tr>
-                      <th>Imagen</th>
-                      <th>Producto</th>
-                      <th>Stock</th>
-                      <th>Mínimo</th>
-                      <th>Último relleno</th>
-                      <th>Estado</th>
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
+            <p>
+              Producto: <strong>{stockModal.product?.name}</strong>
+            </p>
 
-                  <tbody>
-                    {groupedInventory[categoryName].map((item) => {
-                      const note = getInventoryNote(item);
-                      const baseStockLabel = getBaseStockLabel(item);
+            <div className="form-grid">
+              <label>
+                Existencia
+                <input
+                  type="number"
+                  step="0.01"
+                  value={stockModal.stock}
+                  onChange={(event) =>
+                    setStockModal((prev) => ({
+                      ...prev,
+                      stock: event.target.value,
+                    }))
+                  }
+                />
+              </label>
 
-                      return (
-                        <tr key={item.productId}>
-                          <td>
-                            <div className="inventory-product-image">
-                              {item.imageUrl ? (
-                                <img src={item.imageUrl} alt={item.name} />
-                              ) : (
-                                <span>Sin imagen</span>
-                              )}
-                            </div>
-                          </td>
+              <label>
+                Stock mínimo
+                <input
+                  type="number"
+                  step="0.01"
+                  value={stockModal.minStock}
+                  onChange={(event) =>
+                    setStockModal((prev) => ({
+                      ...prev,
+                      minStock: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
 
-                          <td>
-                            <strong>{item.name}</strong>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="modal-cancel-button"
+                onClick={closeStockModal}
+                disabled={loading}
+              >
+                Cancelar
+              </button>
 
-                            {note && (
-                              <div className="inventory-derived-note">
-                                {note}
-                              </div>
-                            )}
-
-                            {baseStockLabel && (
-                              <div className="inventory-base-note">
-                                {baseStockLabel}
-                              </div>
-                            )}
-                          </td>
-
-                          <td>{getStockLabel(item)}</td>
-
-                          <td>{Number(item.minStock || 0)}</td>
-
-                          <td>{formatLastRestockDate(item.updatedAt)}</td>
-
-                          <td>{renderInventoryStatus(item.inventoryStatus)}</td>
-
-                          <td>
-                            {canEditInventory(item) ? (
-                              <div className="inventory-actions">
-                                <button onClick={() => onRestock(item)}>
-                                  Reabastecer
-                                </button>
-
-                                <button onClick={() => onAdjust(item)}>
-                                  Ajustar
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="inventory-derived-note">
-                                No se ajusta directamente
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          ))}
+              <button
+                type="button"
+                className="modal-confirm-button"
+                onClick={saveStock}
+                disabled={loading}
+              >
+                {loading ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
-export default InventoryPanel;    
+export default InventoryPanel;
