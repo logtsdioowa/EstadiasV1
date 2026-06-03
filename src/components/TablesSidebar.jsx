@@ -42,7 +42,11 @@ function TablesSidebar({ onAddTableCharge, tableRentalProduct, onNotify }) {
   };
 
   const normalizeTable = (table) => {
-    const tableNumber = table.tableNumber ?? table.TableNumber ?? table.id ?? table.Id;
+    const tableNumber =
+      table.tableNumber ??
+      table.TableNumber ??
+      table.id ??
+      table.Id;
 
     const rawStatus = table.status ?? table.Status ?? "Disponible";
     const normalizedStatus = String(rawStatus).toLowerCase();
@@ -187,7 +191,7 @@ function TablesSidebar({ onAddTableCharge, tableRentalProduct, onNotify }) {
         data.Name ??
         `Mesa ${table.tableNumber}`;
 
-      onAddTableCharge({
+      await onAddTableCharge({
         productId: tableRentalProduct?.productId ?? null,
         name: tableRentalProduct
           ? `${tableRentalProduct.name} - ${tableName}`

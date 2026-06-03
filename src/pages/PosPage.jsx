@@ -99,19 +99,22 @@ function PosPage() {
     };
   };
 
-  const loadCart = async () => {
-    try {
-      const response = await api.get("/ActiveCart");
+ const loadCart = async () => {
+  try {
+    const response = await api.get("/ActiveCart");
 
-      const items = response.data.items ?? response.data.Items ?? [];
+    const items = response.data.items ?? response.data.Items ?? [];
 
-      const normalizedCart = items.map(normalizeCartItem);
+    const normalizedCart = items.map(normalizeCartItem);
 
-      setCart(normalizedCart);
-    } catch (error) {
-      console.error("Error al cargar carrito:", error);
-    }
-  };
+    setCart(normalizedCart);
+
+    return normalizedCart;
+  } catch (error) {
+    console.error("Error al cargar carrito:", error);
+    return [];
+  }
+};
 
   const loadProducts = async () => {
     try {
@@ -522,14 +525,15 @@ function PosPage() {
     }
   };
 
-  const validateAndCleanCart = async () => {
-    await loadProducts();
-    await loadBeers();
-    await loadBottleBases();
-    await loadCart();
+const validateAndCleanCart = async () => {
+  await loadProducts();
+  await loadBeers();
+  await loadBottleBases();
 
-    return cart;
-  };
+  const currentCart = await loadCart();
+
+  return currentCart;
+};
 
   const confirmSale = async () => {
     if (cart.length === 0) {
