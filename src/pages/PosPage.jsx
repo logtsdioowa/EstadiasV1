@@ -9,18 +9,7 @@ function PosPage() {
   const [bottleBases, setBottleBases] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
 
-  const [cart, setCart] = useState(() => {
-    const savedCart = localStorage.getItem("posCart");
-
-    if (!savedCart) return [];
-
-    try {
-      return JSON.parse(savedCart);
-    } catch (error) {
-      console.error("Error al leer carrito guardado:", error);
-      return [];
-    }
-  });
+  const [cart, setCart] = useState([]);
 
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -44,8 +33,14 @@ function PosPage() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("posCart", JSON.stringify(cart));
-  }, [cart]);
+    loadCart();
+
+    const interval = setInterval(() => {
+      loadCart();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const loadInitialData = async () => {
     await Promise.all([
@@ -53,6 +48,7 @@ function PosPage() {
       loadBeers(),
       loadBottleBases(),
       loadPaymentMethods(),
+      loadCart(),
     ]);
   };
 
@@ -83,6 +79,40 @@ function PosPage() {
     });
   };
 
+  const normalizeCartItem = (item) => {
+    const activeCartItemId = item.activeCartItemId ?? item.ActiveCartItemId;
+
+    return {
+      activeCartItemId,
+      cartItemId: String(activeCartItemId),
+      productId: item.productId ?? item.ProductId ?? null,
+      name: item.name ?? item.Name ?? "Producto",
+      quantity: item.quantity ?? item.Quantity ?? 1,
+      unitPrice: item.unitPrice ?? item.UnitPrice ?? 0,
+      subtotal: item.subtotal ?? item.Subtotal ?? 0,
+      productType: item.productType ?? item.ProductType ?? "INDIVIDUAL",
+      selectedBeerProductId:
+        item.selectedBeerProductId ?? item.SelectedBeerProductId ?? null,
+      selectedBottleProductId:
+        item.selectedBottleProductId ?? item.SelectedBottleProductId ?? null,
+      totalMinutes: item.totalMinutes ?? item.TotalMinutes ?? null,
+    };
+  };
+
+  const loadCart = async () => {
+    try {
+      const response = await api.get("/ActiveCart");
+
+      const items = response.data.items ?? response.data.Items ?? [];
+
+      const normalizedCart = items.map(normalizeCartItem);
+
+      setCart(normalizedCart);
+    } catch (error) {
+      console.error("Error al cargar carrito:", error);
+    }
+  };
+
   const loadProducts = async () => {
     try {
       const response = await api.get("/Products");
@@ -99,7 +129,9 @@ function PosPage() {
         trackInventory:
           product.trackInventory ?? product.TrackInventory ?? false,
         requiresBeerSelection:
-          product.requiresBeerSelection ?? product.RequiresBeerSelection ?? false,
+          product.requiresBeerSelection ??
+          product.RequiresBeerSelection ??
+          false,
         isBeer: product.isBeer ?? product.IsBeer ?? false,
         inventoryStatus:
           product.inventoryStatus ?? product.InventoryStatus ?? "NO_TRACK",
@@ -221,6 +253,8 @@ function PosPage() {
   };
 
   const getRequiredBeerQuantity = (product) => {
+    if (!product) return 1;
+
     if (product.productType === "BEER_BUCKET") {
       return Number(product.inventoryMultiplier || 10);
     }
@@ -228,7 +262,7 @@ function PosPage() {
     return Number(product.inventoryMultiplier || 1);
   };
 
-  const addPreparedDrinkToCart = (selectedBeer) => {
+  const addPreparedDrinkToCart = async (selectedBeer) => {
     const product = beerModal.product;
 
     if (!product) {
@@ -251,69 +285,31 @@ function PosPage() {
       return;
     }
 
-    const maxQuantity = Math.floor(
-      Number(selectedBeer.stock || 0) / requiredQuantity
-    );
+    try {
+      const item = {
+        productId: product.productId,
+        name: `${product.name} - ${selectedBeer.name}`,
+        quantity: 1,
+        unitPrice: Number(product.price || 0),
+        subtotal: Number(product.price || 0),
+        productType: product.productType,
+        selectedBeerProductId: selectedBeer.productId,
+        selectedBottleProductId: null,
+        totalMinutes: null,
+      };
 
-    const cartItemId = `${product.productId}-beer-${selectedBeer.productId}`;
+      await api.post("/ActiveCart/Items", item);
+      await loadCart();
 
-    setCart((prevCart) => {
-      const existingItem = prevCart.find(
-        (item) => item.cartItemId === cartItemId
-      );
-
-      if (existingItem) {
-        const newQuantity = existingItem.quantity + 1;
-
-        if (newQuantity > maxQuantity) {
-          showToast(
-            `No hay suficiente stock de ${selectedBeer.name}. Disponible para ${maxQuantity} venta(s).`,
-            "warning"
-          );
-
-          return prevCart;
-        }
-
-        return prevCart.map((item) =>
-          item.cartItemId === cartItemId
-            ? {
-                ...item,
-                quantity: newQuantity,
-                subtotal: newQuantity * Number(item.unitPrice || 0),
-                selectedBeerStock: selectedBeer.stock,
-              }
-            : item
-        );
-      }
-
-      return [
-        ...prevCart,
-        {
-          cartItemId,
-          productId: product.productId,
-          name: `${product.name} - ${selectedBeer.name}`,
-          quantity: 1,
-          unitPrice: Number(product.price || 0),
-          subtotal: Number(product.price || 0),
-          trackInventory: false,
-          stock: maxQuantity,
-          requiresBeerSelection: true,
-          selectedBeerProductId: selectedBeer.productId,
-          selectedBeerName: selectedBeer.name,
-          selectedBeerStock: selectedBeer.stock,
-          selectedBottleProductId: null,
-          selectedBottleName: null,
-          productType: product.productType,
-          inventoryMultiplier: requiredQuantity,
-        },
-      ];
-    });
-
-    closeBeerModal();
-    showToast("Producto agregado al carrito.", "success");
+      closeBeerModal();
+      showToast("Producto agregado al carrito.", "success");
+    } catch (error) {
+      console.error("Error al agregar bebida con cerveza:", error);
+      showToast("No se pudo agregar el producto al carrito.", "error");
+    }
   };
 
-  const addLiquorProductToCart = (selectedBottle) => {
+  const addLiquorProductToCart = async (selectedBottle) => {
     const product = bottleModal.product;
 
     if (!product) {
@@ -350,74 +346,40 @@ function PosPage() {
       return;
     }
 
-    const maxQuantity = Math.floor(bottleStock / requiredBottleAmount);
-    const cartItemId = `${product.productId}-bottle-${selectedBottle.productId}`;
+    try {
+      const item = {
+        productId: product.productId,
+        name: `${product.name} - ${selectedBottle.name}`,
+        quantity: 1,
+        unitPrice: Number(product.price || 0),
+        subtotal: Number(product.price || 0),
+        productType: product.productType,
+        selectedBeerProductId: null,
+        selectedBottleProductId: selectedBottle.productId,
+        totalMinutes: null,
+      };
 
-    setCart((prevCart) => {
-      const existingItem = prevCart.find(
-        (item) => item.cartItemId === cartItemId
-      );
+      await api.post("/ActiveCart/Items", item);
+      await loadCart();
 
-      if (existingItem) {
-        const newQuantity = existingItem.quantity + 1;
-
-        if (newQuantity > maxQuantity) {
-          showToast(
-            `No hay suficiente stock de ${selectedBottle.name}. Disponible para ${maxQuantity} venta(s).`,
-            "warning"
-          );
-
-          return prevCart;
-        }
-
-        return prevCart.map((item) =>
-          item.cartItemId === cartItemId
-            ? {
-                ...item,
-                quantity: newQuantity,
-                subtotal: newQuantity * Number(item.unitPrice || 0),
-                selectedBottleStock: selectedBottle.stock,
-              }
-            : item
-        );
-      }
-
-      return [
-        ...prevCart,
-        {
-          cartItemId,
-          productId: product.productId,
-          name: `${product.name} - ${selectedBottle.name}`,
-          quantity: 1,
-          unitPrice: Number(product.price || 0),
-          subtotal: Number(product.price || 0),
-          trackInventory: false,
-          stock: maxQuantity,
-          requiresBeerSelection: false,
-          selectedBeerProductId: null,
-          selectedBeerName: null,
-          selectedBottleProductId: selectedBottle.productId,
-          selectedBottleName: selectedBottle.name,
-          selectedBottleStock: selectedBottle.stock,
-          productType: product.productType,
-          servingVolumeMl,
-          bottleVolumeMl,
-          bottleRequiredAmount: requiredBottleAmount,
-        },
-      ];
-    });
-
-    closeBottleModal();
-    showToast("Producto agregado al carrito.", "success");
+      closeBottleModal();
+      showToast("Producto agregado al carrito.", "success");
+    } catch (error) {
+      console.error("Error al agregar producto con botella:", error);
+      showToast("No se pudo agregar el producto al carrito.", "error");
+    }
   };
 
-  const addToCart = (product) => {
+  const addToCart = async (product) => {
     if (product.requiresBeerSelection) {
       openBeerModal(product);
       return;
     }
 
-    if (product.productType === "SHOT" || product.productType === "LIQUOR_DRINK") {
+    if (
+      product.productType === "SHOT" ||
+      product.productType === "LIQUOR_DRINK"
+    ) {
       openBottleModal(product);
       return;
     }
@@ -427,327 +389,146 @@ function PosPage() {
       return;
     }
 
-    const cartItemId = String(product.productId);
+    try {
+      const item = {
+        productId: product.productId,
+        name: product.name,
+        quantity: 1,
+        unitPrice: Number(product.price || 0),
+        subtotal: Number(product.price || 0),
+        productType: product.productType,
+        selectedBeerProductId: null,
+        selectedBottleProductId: null,
+        totalMinutes: null,
+      };
 
-    setCart((prevCart) => {
-      const existingItem = prevCart.find(
-        (item) => item.cartItemId === cartItemId
+      await api.post("/ActiveCart/Items", item);
+      await loadCart();
+
+      showToast("Producto agregado al carrito.", "success");
+    } catch (error) {
+      console.error("Error al agregar producto al carrito:", error);
+      showToast("No se pudo agregar el producto al carrito.", "error");
+    }
+  };
+
+  const increaseQuantity = async (cartItemId) => {
+    const item = cart.find((cartItem) => cartItem.cartItemId === cartItemId);
+
+    if (!item) return;
+
+    try {
+      await api.put(`/ActiveCart/Items/${item.activeCartItemId}`, {
+        quantity: Number(item.quantity || 0) + 1,
+      });
+
+      await loadCart();
+    } catch (error) {
+      console.error("Error al aumentar cantidad:", error);
+      showToast("No se pudo actualizar la cantidad.", "error");
+    }
+  };
+
+  const decreaseQuantity = async (cartItemId) => {
+    const item = cart.find((cartItem) => cartItem.cartItemId === cartItemId);
+
+    if (!item) return;
+
+    try {
+      const newQuantity = Number(item.quantity || 0) - 1;
+
+      if (newQuantity <= 0) {
+        await api.delete(`/ActiveCart/Items/${item.activeCartItemId}`);
+      } else {
+        await api.put(`/ActiveCart/Items/${item.activeCartItemId}`, {
+          quantity: newQuantity,
+        });
+      }
+
+      await loadCart();
+    } catch (error) {
+      console.error("Error al disminuir cantidad:", error);
+      showToast("No se pudo actualizar la cantidad.", "error");
+    }
+  };
+
+  const removeFromCart = async (cartItemId) => {
+    const item = cart.find((cartItem) => cartItem.cartItemId === cartItemId);
+
+    if (!item) return;
+
+    try {
+      await api.delete(`/ActiveCart/Items/${item.activeCartItemId}`);
+      await loadCart();
+
+      showToast("Producto eliminado del carrito.", "success");
+    } catch (error) {
+      console.error("Error al eliminar producto:", error);
+      showToast("No se pudo eliminar el producto.", "error");
+    }
+  };
+
+  const clearCart = async () => {
+    try {
+      await api.delete("/ActiveCart/Clear");
+      await loadCart();
+
+      showToast("Carrito vaciado correctamente.", "success");
+    } catch (error) {
+      console.error("Error al vaciar carrito:", error);
+      showToast("No se pudo vaciar el carrito.", "error");
+    }
+  };
+
+  const tableRentalProduct = products.find(
+    (product) =>
+      product.productType === "SERVICE" &&
+      product.name.toLowerCase().includes("mesa")
+  );
+
+  const onAddTableCharge = async (tableCharge) => {
+    try {
+      const unitPrice = Number(
+        tableCharge.total ?? tableCharge.unitPrice ?? tableCharge.subtotal ?? 0
       );
 
-      if (existingItem) {
-        const newQuantity = existingItem.quantity + 1;
+      const item = {
+        productId:
+          tableCharge.productId ??
+          tableCharge.ProductId ??
+          tableRentalProduct?.productId ??
+          null,
+        name:
+          tableCharge.name ??
+          tableCharge.Name ??
+          `Mesa ${tableCharge.tableNumber ?? tableCharge.TableNumber ?? ""}`,
+        quantity: 1,
+        unitPrice,
+        subtotal: unitPrice,
+        productType: "SERVICE",
+        selectedBeerProductId: null,
+        selectedBottleProductId: null,
+        totalMinutes:
+          tableCharge.totalMinutes ?? tableCharge.TotalMinutes ?? null,
+      };
 
-        if (product.trackInventory && newQuantity > Number(product.stock || 0)) {
-          showToast("No hay suficiente stock disponible.", "warning");
-          return prevCart;
-        }
+      await api.post("/ActiveCart/Items", item);
+      await loadCart();
 
-        return prevCart.map((item) =>
-          item.cartItemId === cartItemId
-            ? {
-                ...item,
-                quantity: newQuantity,
-                subtotal: newQuantity * Number(item.unitPrice || 0),
-              }
-            : item
-        );
-      }
-
-      return [
-        ...prevCart,
-        {
-          cartItemId,
-          productId: product.productId,
-          name: product.name,
-          quantity: 1,
-          unitPrice: Number(product.price || 0),
-          subtotal: Number(product.price || 0),
-          trackInventory: product.trackInventory,
-          stock: product.stock,
-          requiresBeerSelection: false,
-          selectedBeerProductId: null,
-          selectedBeerName: null,
-          selectedBottleProductId: null,
-          selectedBottleName: null,
-          productType: product.productType,
-          inventoryMultiplier: product.inventoryMultiplier || 1,
-        },
-      ];
-    });
-
-    showToast("Producto agregado al carrito.", "success");
-  };
-
-  const increaseQuantity = (cartItemId) => {
-    setCart((prevCart) =>
-      prevCart.map((item) => {
-        if (item.cartItemId !== cartItemId) return item;
-
-        const newQuantity = item.quantity + 1;
-
-        if (item.selectedBeerProductId) {
-          const selectedBeer = beers.find(
-            (beer) => Number(beer.productId) === Number(item.selectedBeerProductId)
-          );
-
-          if (!selectedBeer) {
-            showToast("No se encontró la cerveza seleccionada.", "warning");
-            return item;
-          }
-
-          const requiredQuantity = Number(item.inventoryMultiplier || 1);
-          const maxQuantity = Math.floor(
-            Number(selectedBeer.stock || 0) / requiredQuantity
-          );
-
-          if (newQuantity > maxQuantity) {
-            showToast(
-              `No hay suficiente stock de ${item.selectedBeerName}. Disponible para ${maxQuantity} venta(s).`,
-              "warning"
-            );
-
-            return item;
-          }
-        } else if (item.selectedBottleProductId) {
-          const selectedBottle = bottleBases.find(
-            (bottle) =>
-              Number(bottle.productId) === Number(item.selectedBottleProductId)
-          );
-
-          if (!selectedBottle) {
-            showToast("No se encontró la botella seleccionada.", "warning");
-            return item;
-          }
-
-          const servingVolumeMl = Number(item.servingVolumeMl || 0);
-          const bottleVolumeMl = Number(selectedBottle.bottleVolumeMl || 0);
-          const bottleStock = Number(selectedBottle.stock || 0);
-
-          const requiredBottleAmount =
-            bottleVolumeMl > 0 ? servingVolumeMl / bottleVolumeMl : 0;
-
-          const maxQuantity =
-            requiredBottleAmount > 0
-              ? Math.floor(bottleStock / requiredBottleAmount)
-              : 0;
-
-          if (newQuantity > maxQuantity) {
-            showToast(
-              `No hay suficiente stock de ${item.selectedBottleName}. Disponible para ${maxQuantity} venta(s).`,
-              "warning"
-            );
-
-            return item;
-          }
-        } else if (item.trackInventory && newQuantity > Number(item.stock || 0)) {
-          showToast("No hay suficiente stock disponible.", "warning");
-          return item;
-        }
-
-        return {
-          ...item,
-          quantity: newQuantity,
-          subtotal: newQuantity * Number(item.unitPrice || 0),
-        };
-      })
-    );
-  };
-
-  const decreaseQuantity = (cartItemId) => {
-    setCart((prevCart) =>
-      prevCart
-        .map((item) => {
-          if (item.cartItemId !== cartItemId) return item;
-
-          const newQuantity = item.quantity - 1;
-
-          if (newQuantity <= 0) return null;
-
-          return {
-            ...item,
-            quantity: newQuantity,
-            subtotal: newQuantity * Number(item.unitPrice || 0),
-          };
-        })
-        .filter(Boolean)
-    );
-  };
-
-  const removeFromCart = (cartItemId) => {
-    const itemToRemove = cart.find((item) => item.cartItemId === cartItemId);
-
-    if (itemToRemove?.tableId && window.resetPoolTable) {
-      window.resetPoolTable(itemToRemove.tableId);
+      showToast("Mesa agregada al carrito.", "success");
+    } catch (error) {
+      console.error("Error al agregar mesa al carrito:", error);
+      showToast("No se pudo agregar la mesa al carrito.", "error");
     }
-
-    setCart((prevCart) =>
-      prevCart.filter((item) => item.cartItemId !== cartItemId)
-    );
-  };
-
-  const clearCart = () => {
-    cart.forEach((item) => {
-      if (item.tableId && window.resetPoolTable) {
-        window.resetPoolTable(item.tableId);
-      }
-    });
-
-    setCart([]);
-  };
-
-  const onAddTableCharge = (tableCharge) => {
-    const cartItemId = `table-${tableCharge.tableId}`;
-
-    setCart((prevCart) => {
-      const exists = prevCart.some((item) => item.cartItemId === cartItemId);
-
-      if (exists) {
-        showToast("La mesa ya fue agregada al carrito.", "warning");
-        return prevCart;
-      }
-
-      return [
-        ...prevCart,
-        {
-          ...tableCharge,
-          cartItemId,
-          productType: "SERVICE",
-          selectedBeerProductId: null,
-          selectedBottleProductId: null,
-        },
-      ];
-    });
-
-    showToast("Mesa agregada al carrito.", "success");
   };
 
   const validateAndCleanCart = async () => {
-    let wasModified = false;
+    await loadProducts();
+    await loadBeers();
+    await loadBottleBases();
+    await loadCart();
 
-    const cleanedCart = cart
-      .map((item) => {
-        if (item.selectedBeerProductId) {
-          const selectedBeer = beers.find(
-            (beer) => Number(beer.productId) === Number(item.selectedBeerProductId)
-          );
-
-          if (!selectedBeer) {
-            wasModified = true;
-            return null;
-          }
-
-          const requiredQuantity = Number(item.inventoryMultiplier || 1);
-          const maxQuantity = Math.floor(
-            Number(selectedBeer.stock || 0) / requiredQuantity
-          );
-
-          if (maxQuantity <= 0) {
-            wasModified = true;
-            return null;
-          }
-
-          if (item.quantity > maxQuantity) {
-            wasModified = true;
-
-            return {
-              ...item,
-              quantity: maxQuantity,
-              subtotal: maxQuantity * Number(item.unitPrice || 0),
-              selectedBeerStock: selectedBeer.stock,
-            };
-          }
-
-          return {
-            ...item,
-            selectedBeerStock: selectedBeer.stock,
-          };
-        }
-
-        if (item.selectedBottleProductId) {
-          const selectedBottle = bottleBases.find(
-            (bottle) =>
-              Number(bottle.productId) === Number(item.selectedBottleProductId)
-          );
-
-          if (!selectedBottle) {
-            wasModified = true;
-            return null;
-          }
-
-          const servingVolumeMl = Number(item.servingVolumeMl || 0);
-          const bottleVolumeMl = Number(selectedBottle.bottleVolumeMl || 0);
-          const bottleStock = Number(selectedBottle.stock || 0);
-
-          if (servingVolumeMl <= 0 || bottleVolumeMl <= 0) {
-            wasModified = true;
-            return null;
-          }
-
-          const requiredBottleAmount = servingVolumeMl / bottleVolumeMl;
-          const maxQuantity = Math.floor(bottleStock / requiredBottleAmount);
-
-          if (maxQuantity <= 0) {
-            wasModified = true;
-            return null;
-          }
-
-          if (item.quantity > maxQuantity) {
-            wasModified = true;
-
-            return {
-              ...item,
-              quantity: maxQuantity,
-              subtotal: maxQuantity * Number(item.unitPrice || 0),
-              selectedBottleStock: selectedBottle.stock,
-            };
-          }
-
-          return {
-            ...item,
-            selectedBottleStock: selectedBottle.stock,
-          };
-        }
-
-        const product = products.find(
-          (p) => Number(p.productId) === Number(item.productId)
-        );
-
-        if (!product && item.productType !== "SERVICE") {
-          wasModified = true;
-          return null;
-        }
-
-        if (product?.trackInventory && item.quantity > Number(product.stock || 0)) {
-          const availableQuantity = Math.floor(Number(product.stock || 0));
-
-          if (availableQuantity <= 0) {
-            wasModified = true;
-            return null;
-          }
-
-          wasModified = true;
-
-          return {
-            ...item,
-            quantity: availableQuantity,
-            subtotal: availableQuantity * Number(item.unitPrice || 0),
-            stock: product.stock,
-          };
-        }
-
-        return item;
-      })
-      .filter(Boolean);
-
-    if (wasModified) {
-      setCart(cleanedCart);
-      showToast(
-        "El carrito fue actualizado por cambios en el inventario.",
-        "warning"
-      );
-    }
-
-    return cleanedCart;
+    return cart;
   };
 
   const confirmSale = async () => {
@@ -792,11 +573,7 @@ function PosPage() {
 
       showToast("Venta registrada correctamente.", "success");
 
-      clearCart();
-
-      if (window.resetChargedTables) {
-        window.resetChargedTables();
-      }
+      await clearCart();
 
       await loadProducts();
       await loadBeers();
@@ -805,7 +582,10 @@ function PosPage() {
       setConfirmSaleModal(false);
     } catch (error) {
       console.error("Error al registrar venta:", error);
-      showToast(normalizeApiError(error, "No se pudo registrar la venta."), "error");
+      showToast(
+        normalizeApiError(error, "No se pudo registrar la venta."),
+        "error"
+      );
     } finally {
       setLoading(false);
     }
@@ -865,12 +645,6 @@ function PosPage() {
 
     return a.localeCompare(b);
   });
-
-  const tableRentalProduct = products.find(
-    (product) =>
-      product.productType === "SERVICE" &&
-      product.name.toLowerCase().includes("mesa")
-  );
 
   return (
     <div className="pos-page">
@@ -1065,7 +839,8 @@ function PosPage() {
                           <strong>{bottle.name}</strong>
                           <span>{Number(bottle.bottleVolumeMl || 0)} ml</span>
                           <span>
-                            Stock: {Number(bottle.stock || 0).toFixed(2)} botella(s)
+                            Stock: {Number(bottle.stock || 0).toFixed(2)}{" "}
+                            botella(s)
                           </span>
                           <span>Disponible para: {maxSales} venta(s)</span>
 
@@ -1104,10 +879,15 @@ function PosPage() {
           ) : (
             <div className="category-sections">
               {orderedCategoryNames.map((categoryName) => (
-                <section className="product-category-section" key={categoryName}>
+                <section
+                  className="product-category-section"
+                  key={categoryName}
+                >
                   <div className="product-category-header">
                     <h2>{categoryName}</h2>
-                    <span>{groupedProducts[categoryName].length} producto(s)</span>
+                    <span>
+                      {groupedProducts[categoryName].length} producto(s)
+                    </span>
                   </div>
 
                   <div className="products-grid">
@@ -1150,6 +930,12 @@ function PosPage() {
                     <span>{formatCurrency(item.unitPrice)}</span>
                     <span>Subtotal: {formatCurrency(item.subtotal)}</span>
                   </div>
+
+                  {item.totalMinutes && (
+                    <div className="cart-item-meta">
+                      <span>Tiempo: {item.totalMinutes} minuto(s)</span>
+                    </div>
+                  )}
 
                   <div className="cart-quantity-controls">
                     <button
