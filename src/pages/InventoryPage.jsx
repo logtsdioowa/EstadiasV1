@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../services/api";
 import InventoryPanel from "../components/InventoryPanel";
 
+
 function InventoryPage() {
   const [inventory, setInventory] = useState([]);
   const [toast, setToast] = useState(null);

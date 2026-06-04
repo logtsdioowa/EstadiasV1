@@ -6,7 +6,6 @@ import TablesSidebar from "../components/TablesSidebar";
 function PosPage() {
   const [products, setProducts] = useState([]);
   const [beers, setBeers] = useState([]);
-  const [bottleBases, setBottleBases] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
 
   const [cart, setCart] = useState([]);
@@ -23,9 +22,10 @@ function PosPage() {
     product: null,
   });
 
-  const [bottleModal, setBottleModal] = useState({
+  const [drinkSizeModal, setDrinkSizeModal] = useState({
     isOpen: false,
     product: null,
+    sizes: [],
   });
 
   useEffect(() => {
@@ -66,7 +66,6 @@ function PosPage() {
     await Promise.all([
       loadProducts(),
       loadBeers(),
-      loadBottleBases(),
       loadPaymentMethods(),
       loadCart(),
     ]);
@@ -99,22 +98,51 @@ function PosPage() {
     });
   };
 
+  const getImageUrl = (imageUrl) => {
+    if (!imageUrl) return "";
+
+    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+      return imageUrl;
+    }
+
+    const baseUrl = api.defaults.baseURL.replace("/api", "");
+
+    return `${baseUrl}${imageUrl}`;
+  };
+
+  const isDrinkSizeProduct = (product) => {
+    return (
+      product.productType === "PREPARED_DRINK" ||
+      product.productType === "LIQUOR_DRINK" ||
+      product.productType === "SHOT"
+    );
+  };
+
   const normalizeCartItem = (item) => {
     const activeCartItemId = item.activeCartItemId ?? item.ActiveCartItemId;
 
     return {
       activeCartItemId,
       cartItemId: String(activeCartItemId),
+
       productId: item.productId ?? item.ProductId ?? null,
+
+      productDrinkSizeId:
+        item.productDrinkSizeId ?? item.ProductDrinkSizeId ?? null,
+      drinkSizeName: item.drinkSizeName ?? item.DrinkSizeName ?? null,
+      ouncesUsed: item.ouncesUsed ?? item.OuncesUsed ?? null,
+
       name: item.name ?? item.Name ?? "Producto",
       quantity: item.quantity ?? item.Quantity ?? 1,
       unitPrice: item.unitPrice ?? item.UnitPrice ?? 0,
       subtotal: item.subtotal ?? item.Subtotal ?? 0,
       productType: item.productType ?? item.ProductType ?? "INDIVIDUAL",
+
       selectedBeerProductId:
         item.selectedBeerProductId ?? item.SelectedBeerProductId ?? null,
       selectedBottleProductId:
         item.selectedBottleProductId ?? item.SelectedBottleProductId ?? null,
+
       totalMinutes: item.totalMinutes ?? item.TotalMinutes ?? null,
     };
   };
@@ -158,7 +186,7 @@ function PosPage() {
         isBeer: product.isBeer ?? product.IsBeer ?? false,
         inventoryStatus:
           product.inventoryStatus ?? product.InventoryStatus ?? "NO_TRACK",
-        imageUrl: product.imageUrl ?? product.ImageUrl ?? "",
+        imageUrl: getImageUrl(product.imageUrl ?? product.ImageUrl ?? ""),
         productType:
           product.productType ?? product.ProductType ?? "BOTTLED_DRINK",
         inventorySourceProductId:
@@ -194,7 +222,7 @@ function PosPage() {
         minStock: beer.minStock ?? beer.MinStock ?? 0,
         trackInventory: beer.trackInventory ?? beer.TrackInventory ?? true,
         isBeer: beer.isBeer ?? beer.IsBeer ?? true,
-        imageUrl: beer.imageUrl ?? beer.ImageUrl ?? "",
+        imageUrl: getImageUrl(beer.imageUrl ?? beer.ImageUrl ?? ""),
         productType: beer.productType ?? beer.ProductType ?? "BOTTLED_DRINK",
       }));
 
@@ -202,26 +230,6 @@ function PosPage() {
     } catch (error) {
       console.error("Error al cargar cervezas:", error);
       showToast("No se pudieron cargar las cervezas.", "error");
-    }
-  };
-
-  const loadBottleBases = async () => {
-    try {
-      const response = await api.get("/Products/BottleBases");
-
-      const normalizedBottleBases = response.data.map((bottle) => ({
-        productId: bottle.productId ?? bottle.ProductId,
-        name: bottle.name ?? bottle.Name,
-        category: bottle.category ?? bottle.Category ?? "Botellas",
-        stock: bottle.stock ?? bottle.Stock ?? 0,
-        bottleVolumeMl: bottle.bottleVolumeMl ?? bottle.BottleVolumeMl ?? 0,
-        imageUrl: bottle.imageUrl ?? bottle.ImageUrl ?? "",
-      }));
-
-      setBottleBases(normalizedBottleBases);
-    } catch (error) {
-      console.error("Error al cargar botellas:", error);
-      showToast("No se pudieron cargar las botellas.", "error");
     }
   };
 
@@ -261,17 +269,49 @@ function PosPage() {
     });
   };
 
-  const openBottleModal = (product) => {
-    setBottleModal({
-      isOpen: true,
-      product,
-    });
+  const openDrinkSizeModal = async (product) => {
+    try {
+      const response = await api.get(`/Products/${product.productId}/DrinkSizes`);
+
+      const sizes = response.data.map((size) => ({
+        productDrinkSizeId:
+          size.productDrinkSizeId ?? size.ProductDrinkSizeId,
+        productId: size.productId ?? size.ProductId,
+        sizeName: size.sizeName ?? size.SizeName,
+        ouncesUsed: size.ouncesUsed ?? size.OuncesUsed,
+        price: size.price ?? size.Price,
+        imageUrl: getImageUrl(size.imageUrl ?? size.ImageUrl ?? ""),
+        inventorySourceProductId:
+          size.inventorySourceProductId ??
+          size.InventorySourceProductId ??
+          null,
+        inventorySourceProductName:
+          size.inventorySourceProductName ??
+          size.InventorySourceProductName ??
+          "",
+      }));
+
+      if (sizes.length === 0) {
+        showToast("Este producto no tiene tamaños configurados.", "warning");
+        return;
+      }
+
+      setDrinkSizeModal({
+        isOpen: true,
+        product,
+        sizes,
+      });
+    } catch (error) {
+      console.error("Error al cargar tamaños:", error);
+      showToast("No se pudieron cargar los tamaños.", "error");
+    }
   };
 
-  const closeBottleModal = () => {
-    setBottleModal({
+  const closeDrinkSizeModal = () => {
+    setDrinkSizeModal({
       isOpen: false,
       product: null,
+      sizes: [],
     });
   };
 
@@ -316,8 +356,14 @@ function PosPage() {
         unitPrice: Number(product.price || 0),
         subtotal: Number(product.price || 0),
         productType: product.productType,
+
         selectedBeerProductId: selectedBeer.productId,
         selectedBottleProductId: null,
+
+        productDrinkSizeId: null,
+        drinkSizeName: null,
+        ouncesUsed: null,
+
         totalMinutes: null,
       };
 
@@ -332,78 +378,95 @@ function PosPage() {
     }
   };
 
-  const addLiquorProductToCart = async (selectedBottle) => {
-    const product = bottleModal.product;
+  const handleDrinkSizeSelection = async (selectedSize) => {
+    const product = drinkSizeModal.product;
 
     if (!product) {
       showToast("No se encontró el producto seleccionado.", "error");
       return;
     }
 
-    if (!selectedBottle) {
-      showToast("Selecciona una botella.", "warning");
-      return;
-    }
-
-    const servingVolumeMl = Number(product.servingVolumeMl || 0);
-    const bottleVolumeMl = Number(selectedBottle.bottleVolumeMl || 0);
-    const bottleStock = Number(selectedBottle.stock || 0);
-
-    if (servingVolumeMl <= 0) {
-      showToast("Este producto no tiene mililitros configurados.", "warning");
-      return;
-    }
-
-    if (bottleVolumeMl <= 0) {
+    if (!selectedSize.inventorySourceProductId) {
       showToast(
-        "La botella seleccionada no tiene mililitros configurados.",
+        "Este tamaño no tiene botella configurada. Corrige el producto en administración.",
         "warning"
       );
       return;
     }
 
-    const requiredBottleAmount = servingVolumeMl / bottleVolumeMl;
+    const productWithSize = {
+      ...product,
+      selectedDrinkSizeId: selectedSize.productDrinkSizeId,
+      selectedDrinkSizeName: selectedSize.sizeName,
+      ouncesUsed: Number(selectedSize.ouncesUsed || 0),
+      price: Number(selectedSize.price || 0),
+      drinkSizeImageUrl: selectedSize.imageUrl || "",
+      inventorySourceProductId: selectedSize.inventorySourceProductId,
+      inventorySourceProductName: selectedSize.inventorySourceProductName || "",
+    };
 
-    if (bottleStock < requiredBottleAmount) {
-      showToast(`No hay suficiente stock de ${selectedBottle.name}.`, "warning");
+    closeDrinkSizeModal();
+
+    await addDrinkWithSizeToCart(productWithSize);
+  };
+
+  const addDrinkWithSizeToCart = async (product) => {
+    if (!product.selectedDrinkSizeId) {
+      showToast("Selecciona un tamaño.", "warning");
+      return;
+    }
+
+    if (!product.inventorySourceProductId) {
+      showToast(
+        "Este tamaño no tiene botella configurada. Revisa el producto.",
+        "warning"
+      );
       return;
     }
 
     try {
       const item = {
         productId: product.productId,
-        name: `${product.name} - ${selectedBottle.name}`,
+
+        productDrinkSizeId: product.selectedDrinkSizeId,
+        drinkSizeName: product.selectedDrinkSizeName,
+        ouncesUsed: Number(product.ouncesUsed || 0),
+
+        name: `${product.name} - ${product.selectedDrinkSizeName}`,
         quantity: 1,
         unitPrice: Number(product.price || 0),
         subtotal: Number(product.price || 0),
         productType: product.productType,
+
         selectedBeerProductId: null,
-        selectedBottleProductId: selectedBottle.productId,
+
+        /*
+          La botella ya viene configurada desde el tamaño.
+          En POS ya no se selecciona manualmente.
+        */
+        selectedBottleProductId: product.inventorySourceProductId,
+
         totalMinutes: null,
       };
 
       await api.post("/ActiveCart/Items", item);
       await loadCart();
 
-      closeBottleModal();
       showToast("Producto agregado al carrito.", "success");
     } catch (error) {
-      console.error("Error al agregar producto con botella:", error);
-      showToast("No se pudo agregar el producto al carrito.", "error");
+      console.error("Error al agregar bebida con tamaño:", error);
+      showToast("No se pudo agregar la bebida al carrito.", "error");
     }
   };
 
   const addToCart = async (product) => {
-    if (product.requiresBeerSelection) {
-      openBeerModal(product);
+    if (isDrinkSizeProduct(product)) {
+      openDrinkSizeModal(product);
       return;
     }
 
-    if (
-      product.productType === "SHOT" ||
-      product.productType === "LIQUOR_DRINK"
-    ) {
-      openBottleModal(product);
+    if (product.requiresBeerSelection || product.productType === "BEER_BUCKET") {
+      openBeerModal(product);
       return;
     }
 
@@ -420,8 +483,14 @@ function PosPage() {
         unitPrice: Number(product.price || 0),
         subtotal: Number(product.price || 0),
         productType: product.productType,
+
         selectedBeerProductId: null,
         selectedBottleProductId: null,
+
+        productDrinkSizeId: null,
+        drinkSizeName: null,
+        ouncesUsed: null,
+
         totalMinutes: null,
       };
 
@@ -531,8 +600,14 @@ function PosPage() {
         unitPrice,
         subtotal: unitPrice,
         productType: "SERVICE",
+
         selectedBeerProductId: null,
         selectedBottleProductId: null,
+
+        productDrinkSizeId: null,
+        drinkSizeName: null,
+        ouncesUsed: null,
+
         totalMinutes:
           tableCharge.totalMinutes ?? tableCharge.TotalMinutes ?? null,
       };
@@ -550,7 +625,6 @@ function PosPage() {
   const validateAndCleanCart = async () => {
     await loadProducts();
     await loadBeers();
-    await loadBottleBases();
 
     const currentCart = await loadCart();
 
@@ -590,8 +664,13 @@ function PosPage() {
           productId: item.productId,
           quantity: item.quantity,
           customUnitPrice: item.unitPrice,
+
           selectedBeerProductId: item.selectedBeerProductId || null,
           selectedBottleProductId: item.selectedBottleProductId || null,
+
+          productDrinkSizeId: item.productDrinkSizeId || null,
+          drinkSizeName: item.drinkSizeName || null,
+          ouncesUsed: item.ouncesUsed || null,
         })),
       };
 
@@ -603,7 +682,6 @@ function PosPage() {
 
       await loadProducts();
       await loadBeers();
-      await loadBottleBases();
 
       setCashReceived("");
     } catch (error) {
@@ -803,87 +881,50 @@ function PosPage() {
           </div>
         )}
 
-        {bottleModal.isOpen && (
+        {drinkSizeModal.isOpen && (
           <div className="modal-overlay">
             <div className="beer-selector-modal">
               <div className="beer-selector-header">
                 <div>
-                  <h2>Seleccionar botella</h2>
-
-                  <p>
-                    {bottleModal.product?.name} usa{" "}
-                    <strong>
-                      {Number(bottleModal.product?.servingVolumeMl || 0)} ml
-                    </strong>{" "}
-                    por venta.
-                  </p>
+                  <h2>Seleccionar tamaño</h2>
+                  <p>{drinkSizeModal.product?.name}</p>
                 </div>
 
                 <button
                   type="button"
                   className="modal-close-button"
-                  onClick={closeBottleModal}
+                  onClick={closeDrinkSizeModal}
                 >
                   ×
                 </button>
               </div>
 
-              {bottleBases.length === 0 ? (
-                <p>No hay botellas disponibles.</p>
-              ) : (
-                <div className="beer-card-grid">
-                  {bottleBases.map((bottle) => {
-                    const servingVolumeMl = Number(
-                      bottleModal.product?.servingVolumeMl || 0
-                    );
+              <div className="drink-size-grid">
+                {drinkSizeModal.sizes.map((size) => (
+                  <button
+                    type="button"
+                    className="drink-size-card"
+                    key={size.productDrinkSizeId}
+                    onClick={() => handleDrinkSizeSelection(size)}
+                  >
+                    <div className="drink-size-card-image">
+                      {size.imageUrl ? (
+                        <img src={size.imageUrl} alt={size.sizeName} />
+                      ) : (
+                        <span>Sin imagen</span>
+                      )}
+                    </div>
 
-                    const bottleVolumeMl = Number(bottle.bottleVolumeMl || 0);
-                    const bottleStock = Number(bottle.stock || 0);
+                    <strong>{size.sizeName}</strong>
+                    <span>{formatCurrency(size.price)}</span>
+                    <small>{Number(size.ouncesUsed || 0)} oz</small>
 
-                    const requiredBottleAmount =
-                      bottleVolumeMl > 0 ? servingVolumeMl / bottleVolumeMl : 0;
-
-                    const maxSales =
-                      requiredBottleAmount > 0
-                        ? Math.floor(bottleStock / requiredBottleAmount)
-                        : 0;
-
-                    const hasEnoughStock = maxSales > 0;
-
-                    return (
-                      <button
-                        type="button"
-                        className={`beer-select-card ${
-                          !hasEnoughStock ? "beer-select-card-disabled" : ""
-                        }`}
-                        key={bottle.productId}
-                        disabled={!hasEnoughStock}
-                        onClick={() => addLiquorProductToCart(bottle)}
-                      >
-                        <div className="beer-select-image">
-                          {bottle.imageUrl ? (
-                            <img src={bottle.imageUrl} alt={bottle.name} />
-                          ) : (
-                            <span>Sin imagen</span>
-                          )}
-                        </div>
-
-                        <div className="beer-select-info">
-                          <strong>{bottle.name}</strong>
-                          <span>{Number(bottle.bottleVolumeMl || 0)} ml</span>
-                          <span>
-                            Stock: {Number(bottle.stock || 0).toFixed(2)}{" "}
-                            botella(s)
-                          </span>
-                          <span>Disponible para: {maxSales} venta(s)</span>
-
-                          {!hasEnoughStock && <em>Stock insuficiente</em>}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+                    {size.inventorySourceProductName && (
+                      <small>Botella: {size.inventorySourceProductName}</small>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -963,6 +1004,15 @@ function PosPage() {
                     <span>{formatCurrency(item.unitPrice)}</span>
                     <span>Subtotal: {formatCurrency(item.subtotal)}</span>
                   </div>
+
+                  {item.drinkSizeName && (
+                    <div className="cart-item-meta">
+                      <span>Tamaño: {item.drinkSizeName}</span>
+                      {item.ouncesUsed && (
+                        <span>{Number(item.ouncesUsed)} oz</span>
+                      )}
+                    </div>
+                  )}
 
                   {item.totalMinutes && (
                     <div className="cart-item-meta">

@@ -44,6 +44,18 @@ function ProductsPage() {
     productType: "BOTTLED_DRINK",
   });
 
+  const [drinkSizes, setDrinkSizes] = useState([]);
+
+  const [drinkSizeForm, setDrinkSizeForm] = useState({
+    sizeName: "",
+    ouncesUsed: "",
+    price: "",
+    inventorySourceProductId: "",
+    imageFile: null,
+    imagePreview: "",
+    imageUrl: "",
+  });
+
   const [bottleForm, setBottleForm] = useState({
     name: "",
     description: "",
@@ -98,6 +110,52 @@ function ProductsPage() {
   const finalBottleCategoryOptions =
     bottleCategoryOptions.length > 0 ? bottleCategoryOptions : categoriesList;
 
+  const isBeerCategory = (categoryId) => {
+    const selectedCategory = categoriesList.find(
+      (category) => Number(category.categoryId) === Number(categoryId)
+    );
+
+    if (!selectedCategory) return false;
+
+    return normalizeText(selectedCategory.name) === "cervezas";
+  };
+
+  const isLiquorProductType = (productType) => {
+    return productType === "SHOT" || productType === "LIQUOR_DRINK";
+  };
+
+  const isBeerSelectionProductType = (productType) => {
+    return productType === "PREPARED_DRINK" || productType === "BEER_BUCKET";
+  };
+
+  const isDrinkSizeProductType = (productType) => {
+    return (
+      productType === "PREPARED_DRINK" ||
+      productType === "LIQUOR_DRINK" ||
+      productType === "SHOT"
+    );
+  };
+
+  const hasOwnInventoryFields = (productType) => {
+    return productType === "BOTTLED_DRINK" || productType === "PACK";
+  };
+
+  const isCigaretteUnit = (productType) => {
+    return productType === "CIGARETTE_UNIT";
+  };
+
+  const getMinimumDrinkSizePrice = () => {
+    if (drinkSizes.length === 0) return 0;
+
+    return Math.min(...drinkSizes.map((size) => Number(size.price || 0)));
+  };
+
+  const getBottleInventoryOptions = () => {
+    return inventoryBaseProducts.filter((product) => {
+      return Number(product.bottleVolumeMl || 0) > 0;
+    });
+  };
+
   const loadProducts = async () => {
     try {
       const response = await api.get("/Products/Admin");
@@ -120,7 +178,8 @@ function ProductsPage() {
         productType: p.productType ?? p.ProductType ?? "BOTTLED_DRINK",
         inventorySourceProductId:
           p.inventorySourceProductId ?? p.InventorySourceProductId ?? "",
-        inventoryMultiplier: p.inventoryMultiplier ?? p.InventoryMultiplier ?? 1,
+        inventoryMultiplier:
+          p.inventoryMultiplier ?? p.InventoryMultiplier ?? 1,
         bottleVolumeMl: p.bottleVolumeMl ?? p.BottleVolumeMl ?? "",
         servingVolumeMl: p.servingVolumeMl ?? p.ServingVolumeMl ?? "",
       }));
@@ -186,30 +245,43 @@ function ProductsPage() {
     }
   };
 
-  const isBeerCategory = (categoryId) => {
-    const selectedCategory = categoriesList.find(
-      (category) => Number(category.categoryId) === Number(categoryId)
-    );
+  const loadProductDrinkSizes = async (productId) => {
+    try {
+      const response = await api.get(`/Products/${productId}/DrinkSizes`);
 
-    if (!selectedCategory) return false;
+      const normalizedSizes = response.data.map((size) => ({
+        productDrinkSizeId:
+          size.productDrinkSizeId ?? size.ProductDrinkSizeId ?? null,
+        productId: size.productId ?? size.ProductId ?? productId,
+        sizeName: size.sizeName ?? size.SizeName ?? "",
+        ouncesUsed: size.ouncesUsed ?? size.OuncesUsed ?? "",
+        price: size.price ?? size.Price ?? "",
+        inventorySourceProductId:
+          size.inventorySourceProductId ??
+          size.InventorySourceProductId ??
+          "",
+        imageUrl: size.imageUrl ?? size.ImageUrl ?? "",
+        imagePreview: size.imageUrl ?? size.ImageUrl ?? "",
+        imageFile: null,
+      }));
 
-    return normalizeText(selectedCategory.name) === "cervezas";
+      setDrinkSizes(normalizedSizes);
+    } catch (error) {
+      console.error("Error al cargar tamaños de bebida:", error);
+      setDrinkSizes([]);
+    }
   };
 
-  const isLiquorProductType = (productType) => {
-    return productType === "SHOT" || productType === "LIQUOR_DRINK";
-  };
-
-  const isBeerSelectionProductType = (productType) => {
-    return productType === "PREPARED_DRINK" || productType === "BEER_BUCKET";
-  };
-
-  const hasOwnInventoryFields = (productType) => {
-    return productType === "BOTTLED_DRINK" || productType === "PACK";
-  };
-
-  const isCigaretteUnit = (productType) => {
-    return productType === "CIGARETTE_UNIT";
+  const resetDrinkSizeForm = () => {
+    setDrinkSizeForm({
+      sizeName: "",
+      ouncesUsed: "",
+      price: "",
+      inventorySourceProductId: "",
+      imageFile: null,
+      imagePreview: "",
+      imageUrl: "",
+    });
   };
 
   const resetProductForm = () => {
@@ -233,6 +305,9 @@ function ProductsPage() {
       servingVolumeMl: "",
       productType: "BOTTLED_DRINK",
     });
+
+    setDrinkSizes([]);
+    resetDrinkSizeForm();
 
     setEditingProductId(null);
     setSelectedImageFile(null);
@@ -265,6 +340,11 @@ function ProductsPage() {
       };
 
       if (name === "productType") {
+        if (!isDrinkSizeProductType(value)) {
+          setDrinkSizes([]);
+          resetDrinkSizeForm();
+        }
+
         if (value === "BOTTLED_DRINK" || value === "PACK") {
           updated.trackInventory = true;
           updated.requiresBeerSelection = false;
@@ -272,11 +352,13 @@ function ProductsPage() {
           updated.inventoryMultiplier = "1";
           updated.bottleVolumeMl = "";
           updated.servingVolumeMl = "";
+          updated.minStock = updated.minStock || "10";
         }
 
         if (value === "PREPARED_DRINK") {
           updated.trackInventory = false;
           updated.requiresBeerSelection = true;
+          updated.price = "";
           updated.stock = "";
           updated.minStock = "0";
           updated.inventorySourceProductId = "";
@@ -299,11 +381,13 @@ function ProductsPage() {
         if (value === "LIQUOR_DRINK" || value === "SHOT") {
           updated.trackInventory = false;
           updated.requiresBeerSelection = false;
+          updated.price = "";
           updated.stock = "";
           updated.minStock = "0";
           updated.inventorySourceProductId = "";
           updated.inventoryMultiplier = "1";
           updated.bottleVolumeMl = "";
+          updated.servingVolumeMl = "";
         }
 
         if (value === "CIGARETTE_UNIT") {
@@ -341,11 +425,148 @@ function ProductsPage() {
           updated.inventoryMultiplier = "1";
           updated.bottleVolumeMl = "";
           updated.servingVolumeMl = "";
+          setDrinkSizes([]);
+          resetDrinkSizeForm();
         }
       }
 
       return updated;
     });
+  };
+
+  const handleDrinkSizeFormChange = (field, value) => {
+    setDrinkSizeForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleDrinkSizeImageChange = (e) => {
+    const file = e.target.files[0];
+
+    if (!file) {
+      setDrinkSizeForm((prev) => ({
+        ...prev,
+        imageFile: null,
+        imagePreview: "",
+        imageUrl: "",
+      }));
+      return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      showToast("Formato no permitido. Usa JPG, PNG o WEBP.", "warning");
+      e.target.value = "";
+      return;
+    }
+
+    setDrinkSizeForm((prev) => ({
+      ...prev,
+      imageFile: file,
+      imagePreview: URL.createObjectURL(file),
+      imageUrl: "",
+    }));
+  };
+
+  const handleDrinkSizeItemImageChange = (indexToUpdate, file) => {
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      showToast("Formato no permitido. Usa JPG, PNG o WEBP.", "warning");
+      return;
+    }
+
+    setDrinkSizes((prev) =>
+      prev.map((size, index) =>
+        index === indexToUpdate
+          ? {
+              ...size,
+              imageFile: file,
+              imagePreview: URL.createObjectURL(file),
+              imageUrl: "",
+            }
+          : size
+      )
+    );
+  };
+
+  const addDrinkSize = () => {
+    const sizeName = drinkSizeForm.sizeName.trim();
+    const ouncesUsed = Number(drinkSizeForm.ouncesUsed || 0);
+    const price = Number(drinkSizeForm.price || 0);
+    const inventorySourceProductId = drinkSizeForm.inventorySourceProductId;
+
+    if (!sizeName) {
+      showToast("Ingresa el nombre del tamaño.", "warning");
+      return;
+    }
+
+    if (ouncesUsed <= 0) {
+      showToast("Las onzas usadas deben ser mayores a cero.", "warning");
+      return;
+    }
+
+    if (price <= 0) {
+      showToast("El precio debe ser mayor a cero.", "warning");
+      return;
+    }
+
+    if (!inventorySourceProductId) {
+      showToast("Selecciona la botella que se descontará.", "warning");
+      return;
+    }
+
+    const duplicatedSize = drinkSizes.some(
+      (size) => normalizeText(size.sizeName) === normalizeText(sizeName)
+    );
+
+    if (duplicatedSize) {
+      showToast("Ya existe un tamaño con ese nombre.", "warning");
+      return;
+    }
+
+    setDrinkSizes((prev) => [
+      ...prev,
+      {
+        sizeName,
+        ouncesUsed,
+        price,
+        inventorySourceProductId: Number(inventorySourceProductId),
+        imageFile: drinkSizeForm.imageFile,
+        imagePreview: drinkSizeForm.imagePreview,
+        imageUrl: drinkSizeForm.imageUrl,
+      },
+    ]);
+
+    resetDrinkSizeForm();
+  };
+
+  const updateDrinkSize = (indexToUpdate, field, value) => {
+    setDrinkSizes((prev) =>
+      prev.map((size, index) =>
+        index === indexToUpdate
+          ? {
+              ...size,
+              [field]:
+                field === "sizeName"
+                  ? value
+                  : field === "inventorySourceProductId"
+                  ? Number(value || 0)
+                  : Number(value || 0),
+            }
+          : size
+      )
+    );
+  };
+
+  const removeDrinkSize = (indexToRemove) => {
+    setDrinkSizes((prev) =>
+      prev.filter((_, index) => index !== indexToRemove)
+    );
   };
 
   const handleBottleFormChange = (e) => {
@@ -434,6 +655,25 @@ function ProductsPage() {
     return await uploadImageFile(selectedBottleImageFile);
   };
 
+  const uploadDrinkSizeImages = async () => {
+    const uploadedSizes = [];
+
+    for (const size of drinkSizes) {
+      let imageUrl = size.imageUrl || "";
+
+      if (size.imageFile) {
+        imageUrl = await uploadImageFile(size.imageFile);
+      }
+
+      uploadedSizes.push({
+        ...size,
+        imageUrl,
+      });
+    }
+
+    return uploadedSizes;
+  };
+
   const prepareBottleForm = () => {
     const bottleCategory = categoriesList.find((category) =>
       isBottleCategoryName(category.name)
@@ -461,12 +701,60 @@ function ProductsPage() {
     }
 
     if (Number(bottleForm.initialBottleStock) < 0) {
-      showToast("La cantidad inicial de botellas no puede ser negativa.", "warning");
+      showToast(
+        "La cantidad inicial de botellas no puede ser negativa.",
+        "warning"
+      );
       return false;
     }
 
     if (Number(bottleForm.bottleVolumeMl) <= 0) {
-      showToast("El tamaño de la botella en mililitros debe ser mayor a cero.", "warning");
+      showToast(
+        "El tamaño de la botella en mililitros debe ser mayor a cero.",
+        "warning"
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  const validateDrinkSizes = () => {
+    if (!isDrinkSizeProductType(newProduct.productType)) {
+      return true;
+    }
+
+    if (drinkSizes.length === 0) {
+      showToast("Agrega al menos un tamaño para la bebida.", "warning");
+      return false;
+    }
+
+    const invalidSize = drinkSizes.find(
+      (size) =>
+        !String(size.sizeName || "").trim() ||
+        Number(size.ouncesUsed || 0) <= 0 ||
+        Number(size.price || 0) <= 0 ||
+        !size.inventorySourceProductId
+    );
+
+    if (invalidSize) {
+      showToast(
+        "Todos los tamaños deben tener nombre, onzas, precio y botella seleccionada.",
+        "warning"
+      );
+      return false;
+    }
+
+    const duplicatedNames = drinkSizes.some((size, index) =>
+      drinkSizes.some(
+        (otherSize, otherIndex) =>
+          index !== otherIndex &&
+          normalizeText(size.sizeName) === normalizeText(otherSize.sizeName)
+      )
+    );
+
+    if (duplicatedNames) {
+      showToast("No debe haber tamaños con el mismo nombre.", "warning");
       return false;
     }
 
@@ -496,16 +784,15 @@ function ProductsPage() {
       return false;
     }
 
-    if (Number(newProduct.price) <= 0) {
-      showToast("El precio debe ser mayor a cero.", "warning");
-      return false;
-    }
-
-    if (isLiquorProductType(newProduct.productType)) {
-      if (Number(newProduct.servingVolumeMl) <= 0) {
-        showToast("Indica cuántos mililitros usa este producto.", "warning");
+    if (!isDrinkSizeProductType(newProduct.productType)) {
+      if (Number(newProduct.price) <= 0) {
+        showToast("El precio debe ser mayor a cero.", "warning");
         return false;
       }
+    }
+
+    if (!validateDrinkSizes()) {
+      return false;
     }
 
     if (isCigaretteUnit(newProduct.productType)) {
@@ -524,7 +811,10 @@ function ProductsPage() {
       hasOwnInventoryFields(newProduct.productType) &&
       Number(newProduct.inventoryMultiplier || 1) <= 0
     ) {
-      showToast("El multiplicador de inventario debe ser mayor a cero.", "warning");
+      showToast(
+        "El multiplicador de inventario debe ser mayor a cero.",
+        "warning"
+      );
       return false;
     }
 
@@ -535,24 +825,32 @@ function ProductsPage() {
     const uploadedImageUrl = await uploadProductImage();
 
     const isLiquorType = isLiquorProductType(newProduct.productType);
-    const isBeerSelectionType = isBeerSelectionProductType(newProduct.productType);
+    const isBeerSelectionType = isBeerSelectionProductType(
+      newProduct.productType
+    );
     const isBeerBucket = newProduct.productType === "BEER_BUCKET";
     const hasOwnInventory = hasOwnInventoryFields(newProduct.productType);
     const cigaretteUnit = isCigaretteUnit(newProduct.productType);
+    const hasDrinkSizes = isDrinkSizeProductType(newProduct.productType);
 
     return {
       name: newProduct.name.trim(),
       description: newProduct.description,
       categoryId: Number(newProduct.categoryId),
-      price: Number(newProduct.price || 0),
 
-      stock: hasOwnInventory && newProduct.trackInventory
-        ? Number(newProduct.stock || 0)
-        : 0,
+      price: hasDrinkSizes
+        ? Number(getMinimumDrinkSizePrice() || 0)
+        : Number(newProduct.price || 0),
 
-      minStock: hasOwnInventory && newProduct.trackInventory
-        ? Number(newProduct.minStock || 0)
-        : 0,
+      stock:
+        hasOwnInventory && newProduct.trackInventory
+          ? Number(newProduct.stock || 0)
+          : 0,
+
+      minStock:
+        hasOwnInventory && newProduct.trackInventory
+          ? Number(newProduct.minStock || 0)
+          : 0,
 
       trackInventory: cigaretteUnit
         ? true
@@ -584,13 +882,33 @@ function ProductsPage() {
 
       bottleVolumeMl: null,
 
-      servingVolumeMl: isLiquorType
-        ? Number(newProduct.servingVolumeMl || 0)
-        : null,
+      // Importante: ya no se usa servingVolumeMl para bebidas por tamaño.
+      // Las bebidas descuentan con ouncesUsed desde ProductDrinkSizes.
+      servingVolumeMl: null,
 
       imageUrl: uploadedImageUrl,
       productType: newProduct.productType,
     };
+  };
+
+  const saveDrinkSizesForProduct = async (productId) => {
+    if (!isDrinkSizeProductType(newProduct.productType)) {
+      return;
+    }
+
+    const uploadedSizes = await uploadDrinkSizeImages();
+
+    const sizesPayload = uploadedSizes.map((size) => ({
+      sizeName: String(size.sizeName || "").trim(),
+      ouncesUsed: Number(size.ouncesUsed || 0),
+      price: Number(size.price || 0),
+      imageUrl: size.imageUrl || null,
+      inventorySourceProductId: size.inventorySourceProductId
+        ? Number(size.inventorySourceProductId)
+        : null,
+    }));
+
+    await api.post(`/Products/${productId}/DrinkSizes`, sizesPayload);
   };
 
   const saveProduct = async () => {
@@ -599,7 +917,14 @@ function ProductsPage() {
     try {
       const productData = await buildProductData();
 
-      await api.post("/Products", productData);
+      const response = await api.post("/Products", productData);
+
+      const createdProductId =
+        response.data.productId ?? response.data.ProductId;
+
+      if (createdProductId) {
+        await saveDrinkSizesForProduct(createdProductId);
+      }
 
       showToast("Producto agregado correctamente.", "success");
 
@@ -609,7 +934,10 @@ function ProductsPage() {
       await loadInventoryBaseProducts();
     } catch (error) {
       console.error("Error al agregar producto:", error);
-      showToast(normalizeApiError(error, "No se pudo agregar el producto."), "error");
+      showToast(
+        normalizeApiError(error, "No se pudo agregar el producto."),
+        "error"
+      );
     }
   };
 
@@ -625,6 +953,7 @@ function ProductsPage() {
       const productData = await buildProductData();
 
       await api.put(`/Products/${editingProductId}`, productData);
+      await saveDrinkSizesForProduct(editingProductId);
 
       showToast("Producto actualizado correctamente.", "success");
 
@@ -668,11 +997,14 @@ function ProductsPage() {
       await loadInventoryBaseProducts();
     } catch (error) {
       console.error("Error al crear botella:", error);
-      showToast(normalizeApiError(error, "No se pudo crear la botella."), "error");
+      showToast(
+        normalizeApiError(error, "No se pudo crear la botella."),
+        "error"
+      );
     }
   };
 
-  const startEditProduct = (product) => {
+  const startEditProduct = async (product) => {
     const category = categoriesList.find((c) => c.name === product.category);
 
     setEditingProductId(product.productId);
@@ -696,6 +1028,13 @@ function ProductsPage() {
 
     setSelectedImageFile(null);
     setImagePreview(product.imageUrl || "");
+
+    if (isDrinkSizeProductType(product.productType)) {
+      await loadProductDrinkSizes(product.productId);
+    } else {
+      setDrinkSizes([]);
+    }
+
     setShowBottleForm(false);
     setShowProductForm(true);
   };
@@ -799,11 +1138,17 @@ function ProductsPage() {
             <p>{confirmModal.message}</p>
 
             <div className="modal-actions">
-              <button className="modal-cancel-button" onClick={closeConfirmModal}>
+              <button
+                className="modal-cancel-button"
+                onClick={closeConfirmModal}
+              >
                 Cancelar
               </button>
 
-              <button className="modal-danger-button" onClick={handleConfirmAction}>
+              <button
+                className="modal-danger-button"
+                onClick={handleConfirmAction}
+              >
                 Confirmar
               </button>
             </div>
@@ -823,7 +1168,7 @@ function ProductsPage() {
               setShowProductForm((prev) => !prev);
 
               if (!showProductForm) {
-                setEditingProductId(null);
+                resetProductForm();
               }
             }}
           >
@@ -926,20 +1271,6 @@ function ProductsPage() {
                 </div>
               </div>
             )}
-
-            <div className="full-field bottle-calculation-box">
-              <strong>Configuración de botella</strong>
-
-              <p>
-                El sistema guardará el inventario en botellas. En POS se
-                seleccionará qué botella se usará cuando sea necesario.
-              </p>
-
-              <p>
-                Tamaño registrado:{" "}
-                <strong>{Number(bottleForm.bottleVolumeMl || 0)} ml</strong>
-              </p>
-            </div>
           </div>
 
           <div className="form-actions">
@@ -976,17 +1307,29 @@ function ProductsPage() {
               />
             </div>
 
-            <div>
-              <label>Precio</label>
-              <input
-                type="number"
-                name="price"
-                min="0"
-                step="0.01"
-                value={newProduct.price}
-                onChange={handleNewProductChange}
-              />
-            </div>
+            {!isDrinkSizeProductType(newProduct.productType) && (
+              <div>
+                <label>Precio</label>
+                <input
+                  type="number"
+                  name="price"
+                  min="0"
+                  step="0.01"
+                  value={newProduct.price}
+                  onChange={handleNewProductChange}
+                />
+              </div>
+            )}
+
+            {isDrinkSizeProductType(newProduct.productType) && (
+              <div className="bottle-calculation-box">
+                <strong>Precio por tamaño</strong>
+                <p>
+                  El precio principal se tomará automáticamente del tamaño más
+                  barato registrado.
+                </p>
+              </div>
+            )}
 
             <div>
               <label>Categoría</label>
@@ -1013,8 +1356,12 @@ function ProductsPage() {
                 onChange={handleNewProductChange}
               >
                 <option value="BOTTLED_DRINK">Bebida embotellada</option>
-                <option value="PREPARED_DRINK">Bebida preparada con cerveza</option>
-                <option value="LIQUOR_DRINK">Bebida preparada con licor</option>
+                <option value="PREPARED_DRINK">
+                  Bebida preparada con cerveza
+                </option>
+                <option value="LIQUOR_DRINK">
+                  Bebida preparada con licor
+                </option>
                 <option value="SHOT">Shot genérico</option>
                 <option value="BEER_BUCKET">Cubeta de cerveza</option>
                 <option value="PACK">Paquete / cajetilla</option>
@@ -1023,103 +1370,188 @@ function ProductsPage() {
               </select>
             </div>
 
-            {isLiquorProductType(newProduct.productType) && (
-              <div className="full-field bottle-calculation-box">
-                <strong>
-                  {newProduct.productType === "SHOT"
-                    ? "Shot genérico"
-                    : "Bebida preparada con licor"}
-                </strong>
-
-                <p>
-                  En productos solo se registra la bebida y los mililitros que
-                  usa. La botella exacta se seleccionará en el POS al momento de
-                  vender.
-                </p>
-
-                <label>Mililitros que usa</label>
-                <input
-                  type="number"
-                  name="servingVolumeMl"
-                  min="0.01"
-                  step="0.01"
-                  value={newProduct.servingVolumeMl}
-                  onChange={handleNewProductChange}
-                  placeholder="Ej. 50"
-                />
-              </div>
-            )}
-
-            {newProduct.productType === "PREPARED_DRINK" && (
-              <div className="full-field bottle-calculation-box">
-                <strong>Bebida preparada con cerveza</strong>
-
-                <p>
-                  Este producto no maneja stock propio. En el POS se seleccionará
-                  la cerveza que se usará y se descontará una unidad.
-                </p>
-              </div>
-            )}
-
-            {newProduct.productType === "BEER_BUCKET" && (
-              <div className="full-field bottle-calculation-box">
-                <strong>Cubeta de cerveza</strong>
-
-                <p>
-                  Este producto no maneja stock propio. En el POS se seleccionará
-                  la cerveza que se usará y se descontarán 10 unidades.
-                </p>
-              </div>
-            )}
-
-            {newProduct.productType === "CIGARETTE_UNIT" && (
-              <>
-                <div>
-                  <label>Inventario base de cajetillas</label>
-
-                  <select
-                    name="inventorySourceProductId"
-                    value={newProduct.inventorySourceProductId}
-                    onChange={handleNewProductChange}
-                  >
-                    <option value="">Selecciona inventario base</option>
-
-                    {inventoryBaseProducts
-                      .filter((product) => {
-                        const name = normalizeText(product.name);
-                        return !product.bottleVolumeMl && name.includes("cigarro");
-                      })
-                      .map((product) => (
-                        <option key={product.productId} value={product.productId}>
-                          {product.name} — Stock: {product.stock}
-                        </option>
-                      ))}
-                  </select>
+            {isDrinkSizeProductType(newProduct.productType) && (
+              <div className="full-field drink-sizes-section">
+                <div className="drink-sizes-header">
+                  <h3>Tamaños de bebida</h3>
+                  <p>
+                    Agrega los tamaños que se venderán en POS. Cada tamaño debe
+                    tener nombre, onzas usadas, precio, botella de inventario e
+                    imagen.
+                  </p>
                 </div>
 
-                <div>
-                  <label>Descuento por cigarro</label>
+                <div className="drink-size-form drink-size-form-extended">
+                  <input
+                    type="text"
+                    placeholder="Nombre del tamaño"
+                    value={drinkSizeForm.sizeName}
+                    onChange={(e) =>
+                      handleDrinkSizeFormChange("sizeName", e.target.value)
+                    }
+                  />
 
                   <input
                     type="number"
-                    name="inventoryMultiplier"
-                    min="0.0001"
-                    step="0.0001"
-                    value={newProduct.inventoryMultiplier}
-                    onChange={handleNewProductChange}
-                    placeholder="Ej. 0.05"
+                    min="0"
+                    step="0.01"
+                    placeholder="Onzas usadas"
+                    value={drinkSizeForm.ouncesUsed}
+                    onChange={(e) =>
+                      handleDrinkSizeFormChange("ouncesUsed", e.target.value)
+                    }
                   />
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Precio"
+                    value={drinkSizeForm.price}
+                    onChange={(e) =>
+                      handleDrinkSizeFormChange("price", e.target.value)
+                    }
+                  />
+
+                  <select
+                    value={drinkSizeForm.inventorySourceProductId}
+                    onChange={(e) =>
+                      handleDrinkSizeFormChange(
+                        "inventorySourceProductId",
+                        e.target.value
+                      )
+                    }
+                  >
+                    <option value="">Botella a descontar</option>
+
+                    {getBottleInventoryOptions().map((bottle) => (
+                      <option key={bottle.productId} value={bottle.productId}>
+                        {bottle.name} — Stock: {Number(bottle.stock || 0)}
+                      </option>
+                    ))}
+                  </select>
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleDrinkSizeImageChange}
+                  />
+
+                  <button
+                    type="button"
+                    className="add-drink-size-button"
+                    onClick={addDrinkSize}
+                  >
+                    Agregar tamaño
+                  </button>
                 </div>
 
-                <div className="full-field bottle-calculation-box">
-                  <strong>Cigarro suelto</strong>
+                {drinkSizeForm.imagePreview && (
+                  <div className="drink-size-preview">
+                    <img
+                      src={drinkSizeForm.imagePreview}
+                      alt="Vista previa del tamaño"
+                    />
+                  </div>
+                )}
 
-                  <p>
-                    Si una cajetilla tiene 20 cigarros, cada cigarro debe
-                    descontar <strong>0.05</strong> cajetilla.
+                {drinkSizes.length === 0 ? (
+                  <p className="empty-drink-sizes">
+                    No se han agregado tamaños para esta bebida.
                   </p>
-                </div>
-              </>
+                ) : (
+                  <div className="drink-sizes-list">
+                    {drinkSizes.map((size, index) => (
+                      <div
+                        className="drink-size-item drink-size-item-extended"
+                        key={`${size.sizeName}-${index}`}
+                      >
+                        <input
+                          type="text"
+                          value={size.sizeName}
+                          onChange={(e) =>
+                            updateDrinkSize(index, "sizeName", e.target.value)
+                          }
+                        />
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={size.ouncesUsed}
+                          onChange={(e) =>
+                            updateDrinkSize(
+                              index,
+                              "ouncesUsed",
+                              e.target.value
+                            )
+                          }
+                        />
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={size.price}
+                          onChange={(e) =>
+                            updateDrinkSize(index, "price", e.target.value)
+                          }
+                        />
+
+                        <select
+                          value={size.inventorySourceProductId || ""}
+                          onChange={(e) =>
+                            updateDrinkSize(
+                              index,
+                              "inventorySourceProductId",
+                              e.target.value
+                            )
+                          }
+                        >
+                          <option value="">Botella a descontar</option>
+
+                          {getBottleInventoryOptions().map((bottle) => (
+                            <option
+                              key={bottle.productId}
+                              value={bottle.productId}
+                            >
+                              {bottle.name} — Stock:{" "}
+                              {Number(bottle.stock || 0)}
+                            </option>
+                          ))}
+                        </select>
+
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) =>
+                            handleDrinkSizeItemImageChange(
+                              index,
+                              e.target.files[0]
+                            )
+                          }
+                        />
+
+                        {(size.imagePreview || size.imageUrl) && (
+                          <img
+                            className="drink-size-thumbnail"
+                            src={size.imagePreview || size.imageUrl}
+                            alt={size.sizeName}
+                          />
+                        )}
+
+                        <button
+                          type="button"
+                          className="remove-drink-size-button"
+                          onClick={() => removeDrinkSize(index)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             {hasOwnInventoryFields(newProduct.productType) && (
@@ -1163,7 +1595,10 @@ function ProductsPage() {
                     {inventoryBaseProducts
                       .filter((product) => !product.bottleVolumeMl)
                       .map((product) => (
-                        <option key={product.productId} value={product.productId}>
+                        <option
+                          key={product.productId}
+                          value={product.productId}
+                        >
                           {product.name} — Stock: {product.stock}
                         </option>
                       ))}
@@ -1198,8 +1633,12 @@ function ProductsPage() {
             )}
 
             <div>
-              <label>Imagen</label>
-              <input type="file" accept="image/*" onChange={handleImageChange} />
+              <label>Imagen principal</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+              />
             </div>
 
             <div className="full-field">
