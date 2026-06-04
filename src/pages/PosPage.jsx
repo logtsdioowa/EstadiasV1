@@ -16,6 +16,8 @@ function PosPage() {
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  const [cashReceived, setCashReceived] = useState("");
+
   const [beerModal, setBeerModal] = useState({
     isOpen: false,
     product: null,
@@ -25,8 +27,6 @@ function PosPage() {
     isOpen: false,
     product: null,
   });
-
-  const [confirmSaleModal, setConfirmSaleModal] = useState(false);
 
   useEffect(() => {
     loadInitialData();
@@ -41,6 +41,26 @@ function PosPage() {
 
     return () => clearInterval(interval);
   }, []);
+
+  const cartTotal = useMemo(() => {
+    return cart.reduce((total, item) => total + Number(item.subtotal || 0), 0);
+  }, [cart]);
+
+  const selectedPaymentMethod = paymentMethods.find(
+    (method) =>
+      Number(method.paymentMethodId) === Number(selectedPaymentMethodId)
+  );
+
+  const selectedPaymentName = selectedPaymentMethod?.name?.toLowerCase() || "";
+
+  const isCashPayment = selectedPaymentName.includes("efectivo");
+
+  const isCardOrTransferPayment =
+    selectedPaymentName.includes("tarjeta") ||
+    selectedPaymentName.includes("transferencia");
+
+  const cashReceivedNumber = Number(cashReceived || 0);
+  const cashChange = cashReceivedNumber - cartTotal;
 
   const loadInitialData = async () => {
     await Promise.all([
@@ -99,22 +119,22 @@ function PosPage() {
     };
   };
 
- const loadCart = async () => {
-  try {
-    const response = await api.get("/ActiveCart");
+  const loadCart = async () => {
+    try {
+      const response = await api.get("/ActiveCart");
 
-    const items = response.data.items ?? response.data.Items ?? [];
+      const items = response.data.items ?? response.data.Items ?? [];
 
-    const normalizedCart = items.map(normalizeCartItem);
+      const normalizedCart = items.map(normalizeCartItem);
 
-    setCart(normalizedCart);
+      setCart(normalizedCart);
 
-    return normalizedCart;
-  } catch (error) {
-    console.error("Error al cargar carrito:", error);
-    return [];
-  }
-};
+      return normalizedCart;
+    } catch (error) {
+      console.error("Error al cargar carrito:", error);
+      return [];
+    }
+  };
 
   const loadProducts = async () => {
     try {
@@ -476,6 +496,8 @@ function PosPage() {
       await api.delete("/ActiveCart/Clear");
       await loadCart();
 
+      setCashReceived("");
+
       showToast("Carrito vaciado correctamente.", "success");
     } catch (error) {
       console.error("Error al vaciar carrito:", error);
@@ -525,17 +547,17 @@ function PosPage() {
     }
   };
 
-const validateAndCleanCart = async () => {
-  await loadProducts();
-  await loadBeers();
-  await loadBottleBases();
+  const validateAndCleanCart = async () => {
+    await loadProducts();
+    await loadBeers();
+    await loadBottleBases();
 
-  const currentCart = await loadCart();
+    const currentCart = await loadCart();
 
-  return currentCart;
-};
+    return currentCart;
+  };
 
-  const confirmSale = async () => {
+  const processSale = async () => {
     if (cart.length === 0) {
       showToast("El carrito está vacío.", "warning");
       return;
@@ -546,10 +568,11 @@ const validateAndCleanCart = async () => {
       return;
     }
 
-    setConfirmSaleModal(true);
-  };
+    if (isCashPayment && cashReceivedNumber < cartTotal) {
+      showToast("El efectivo recibido es menor al total.", "warning");
+      return;
+    }
 
-  const processSale = async () => {
     try {
       setLoading(true);
 
@@ -557,7 +580,6 @@ const validateAndCleanCart = async () => {
 
       if (cleanedCart.length === 0) {
         showToast("No hay productos disponibles para cobrar.", "warning");
-        setConfirmSaleModal(false);
         return;
       }
 
@@ -583,7 +605,7 @@ const validateAndCleanCart = async () => {
       await loadBeers();
       await loadBottleBases();
 
-      setConfirmSaleModal(false);
+      setCashReceived("");
     } catch (error) {
       console.error("Error al registrar venta:", error);
       showToast(
@@ -595,9 +617,48 @@ const validateAndCleanCart = async () => {
     }
   };
 
-  const cartTotal = useMemo(() => {
-    return cart.reduce((total, item) => total + Number(item.subtotal || 0), 0);
-  }, [cart]);
+  const handleCheckout = async () => {
+    if (cart.length === 0) {
+      showToast("El carrito está vacío.", "warning");
+      return;
+    }
+
+    if (!selectedPaymentMethodId) {
+      showToast("Selecciona un método de pago.", "warning");
+      return;
+    }
+
+    if (isCardOrTransferPayment) {
+      await processSale();
+      return;
+    }
+
+    await processSale();
+  };
+
+  const appendCashValue = (value) => {
+    setCashReceived((prev) => {
+      if (value === "." && prev.includes(".")) return prev;
+
+      if (prev === "0" && value !== ".") {
+        return String(value);
+      }
+
+      return `${prev}${value}`;
+    });
+  };
+
+  const deleteCashValue = () => {
+    setCashReceived((prev) => prev.slice(0, -1));
+  };
+
+  const clearCashValue = () => {
+    setCashReceived("");
+  };
+
+  const setExactCash = () => {
+    setCashReceived(String(Number(cartTotal).toFixed(2)));
+  };
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = searchTerm.toLowerCase().trim();
@@ -663,38 +724,6 @@ const validateAndCleanCart = async () => {
       <div className="pos-layout">
         {toast && (
           <div className={`toast toast-${toast.type}`}>{toast.message}</div>
-        )}
-
-        {confirmSaleModal && (
-          <div className="modal-overlay">
-            <div className="modal-box">
-              <h2>Confirmar venta</h2>
-
-              <p>
-                Total a cobrar: <strong>{formatCurrency(cartTotal)}</strong>
-              </p>
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="modal-cancel-button"
-                  onClick={() => setConfirmSaleModal(false)}
-                  disabled={loading}
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  className="modal-confirm-button"
-                  onClick={processSale}
-                  disabled={loading}
-                >
-                  {loading ? "Procesando..." : "Cobrar"}
-                </button>
-              </div>
-            </div>
-          </div>
         )}
 
         {beerModal.isOpen && (
@@ -973,7 +1002,10 @@ const validateAndCleanCart = async () => {
 
             <select
               value={selectedPaymentMethodId}
-              onChange={(e) => setSelectedPaymentMethodId(e.target.value)}
+              onChange={(e) => {
+                setSelectedPaymentMethodId(e.target.value);
+                setCashReceived("");
+              }}
             >
               <option value="">Selecciona método</option>
 
@@ -988,14 +1020,84 @@ const validateAndCleanCart = async () => {
             </select>
           </div>
 
+          {isCashPayment && (
+            <div className="cash-sidebar-box">
+              <label>Efectivo recibido</label>
+
+              <input
+                type="text"
+                inputMode="none"
+                className="cash-sidebar-input"
+                value={cashReceived}
+                readOnly
+                placeholder="0.00"
+              />
+
+              <div className="cash-sidebar-change">
+                <span>Cambio</span>
+                <strong className={cashChange < 0 ? "cash-change-negative" : ""}>
+                  {formatCurrency(cashChange > 0 ? cashChange : 0)}
+                </strong>
+              </div>
+
+              {cashReceivedNumber < cartTotal && cart.length > 0 && (
+                <p className="cash-warning">
+                  Falta {formatCurrency(cartTotal - cashReceivedNumber)}
+                </p>
+              )}
+            </div>
+          )}
+
           <button
             type="button"
             className="checkout-button"
-            onClick={confirmSale}
+            onClick={handleCheckout}
             disabled={cart.length === 0 || loading}
           >
-            Cobrar
+            {loading ? "Procesando..." : "Cobrar"}
           </button>
+
+          {isCashPayment && (
+            <div className="pos-numpad-sidebar">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((number) => (
+                <button
+                  type="button"
+                  key={number}
+                  onClick={() => appendCashValue(number)}
+                >
+                  {number}
+                </button>
+              ))}
+
+              <button type="button" onClick={() => appendCashValue(".")}>
+                .
+              </button>
+
+              <button type="button" onClick={() => appendCashValue(0)}>
+                0
+              </button>
+
+              <button type="button" onClick={deleteCashValue}>
+                ⌫
+              </button>
+
+              <button
+                type="button"
+                className="numpad-wide"
+                onClick={setExactCash}
+              >
+                Exacto
+              </button>
+
+              <button
+                type="button"
+                className="numpad-wide"
+                onClick={clearCashValue}
+              >
+                Limpiar
+              </button>
+            </div>
+          )}
 
           <button
             type="button"

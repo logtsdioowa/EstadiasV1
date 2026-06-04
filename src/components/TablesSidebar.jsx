@@ -9,24 +9,66 @@ const getDefaultTableType = (tableNumber) => {
   return "pool";
 };
 
+const parseBackendDate = (dateValue) => {
+  if (!dateValue) return null;
+
+  if (dateValue instanceof Date) {
+    return dateValue.getTime();
+  }
+
+  const dateText = String(dateValue);
+
+  const dotNetMatch = dateText.match(/\/Date\((\d+)\)\//);
+  if (dotNetMatch) {
+    return Number(dotNetMatch[1]);
+  }
+
+  const localDateMatch = dateText.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/
+  );
+
+  if (localDateMatch) {
+    const [, year, month, day, hour, minute, second, milliseconds = "0"] =
+      localDateMatch;
+
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      Number(milliseconds.padEnd(3, "0").slice(0, 3))
+    ).getTime();
+  }
+
+  const parsedTime = new Date(dateText).getTime();
+
+  if (!Number.isNaN(parsedTime)) {
+    return parsedTime;
+  }
+
+  return null;
+};
+
 function TablesSidebar({ onAddTableCharge, tableRentalProduct, onNotify }) {
   const [tables, setTables] = useState([]);
-  const [now, setNow] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState(Date.now());
   const [loadingTableId, setLoadingTableId] = useState(null);
 
   useEffect(() => {
     loadTables();
 
-    const interval = setInterval(() => {
+    const polling = setInterval(() => {
       loadTables();
     }, 3000);
 
-    return () => clearInterval(interval);
+    return () => clearInterval(polling);
   }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setNow(new Date());
+      setCurrentTime(Date.now());
     }, 1000);
 
     return () => clearInterval(timer);
@@ -42,46 +84,61 @@ function TablesSidebar({ onAddTableCharge, tableRentalProduct, onNotify }) {
   };
 
   const normalizeTable = (table) => {
-    const tableNumber =
-      table.tableNumber ??
-      table.TableNumber ??
+    const tableId =
+      table.poolTableId ??
+      table.PoolTableId ??
       table.id ??
       table.Id;
 
+    const tableNumber =
+      table.tableNumber ??
+      table.TableNumber ??
+      table.number ??
+      table.Number ??
+      tableId;
+
     const rawStatus = table.status ?? table.Status ?? "Disponible";
-    const normalizedStatus = String(rawStatus).toLowerCase();
+    const normalizedStatus = String(rawStatus).toLowerCase().trim();
+    const elapsedSecondsFromServer =
+      table.elapsedSeconds ??
+      table.ElapsedSeconds ??
+      0;
+
+    const rawStartedAt =
+      table.startedAt ??
+      table.StartedAt ??
+      table.started_at ??
+      table.STARTEDAT ??
+      null;
+
+    const startedAtMs = parseBackendDate(rawStartedAt);
 
     const isOccupied =
       normalizedStatus === "ocupada" ||
-      normalizedStatus === "occupied";
+      normalizedStatus === "ocupado" ||
+      normalizedStatus === "occupied" ||
+      normalizedStatus === "busy" ||
+      Boolean(startedAtMs);
 
-    const tableType =
+    const rawTableType =
       table.tableType ??
       table.TableType ??
       getDefaultTableType(Number(tableNumber));
 
     return {
-      poolTableId:
-        table.poolTableId ??
-        table.PoolTableId ??
-        table.id ??
-        table.Id,
-      tableNumber: Number(tableNumber),
-      name:
-        table.name ??
-        table.Name ??
-        `Mesa ${tableNumber}`,
-      tableType: String(tableType).toLowerCase(),
-      status: isOccupied ? "occupied" : "available",
-      startedAt:
-        table.startedAt ??
-        table.StartedAt ??
-        null,
-      currentCharge:
-        table.currentCharge ??
-        table.CurrentCharge ??
-        0,
-    };
+  poolTableId: Number(tableId),
+  tableNumber: Number(tableNumber),
+  name: table.name ?? table.Name ?? `Mesa ${tableNumber}`,
+  tableType: String(rawTableType).toLowerCase(),
+  status: isOccupied ? "occupied" : "available",
+  rawStatus,
+  startedAt: rawStartedAt,
+  startedAtMs,
+  elapsedSecondsFromServer: Number(elapsedSecondsFromServer || 0),
+  loadedAtMs: Date.now(),
+  stoppedAt: table.stoppedAt ?? table.StoppedAt ?? null,
+  currentCharge: table.currentCharge ?? table.CurrentCharge ?? 0,
+};
   };
 
   const loadTables = async () => {
@@ -99,14 +156,23 @@ function TablesSidebar({ onAddTableCharge, tableRentalProduct, onNotify }) {
     }
   };
 
-  const getElapsedSeconds = (startedAt) => {
-    if (!startedAt) return 0;
+ const getElapsedSeconds = (table) => {
+  if (!table || table.status !== "occupied") return 0;
 
-    const start = new Date(startedAt);
-    const diff = Math.floor((now - start) / 1000);
+  if (Number(table.elapsedSecondsFromServer) > 0) {
+    const secondsSinceLoad = Math.floor(
+      (currentTime - table.loadedAtMs) / 1000
+    );
 
-    return diff > 0 ? diff : 0;
-  };
+    return table.elapsedSecondsFromServer + Math.max(0, secondsSinceLoad);
+  }
+
+  if (!table.startedAtMs) return 0;
+
+  const diff = Math.floor((currentTime - table.startedAtMs) / 1000);
+
+  return diff > 0 ? diff : 0;
+};
 
   const formatTime = (totalSeconds) => {
     const hours = Math.floor(totalSeconds / 3600);
@@ -119,10 +185,8 @@ function TablesSidebar({ onAddTableCharge, tableRentalProduct, onNotify }) {
     )}:${String(seconds).padStart(2, "0")}`;
   };
 
-  const calculateTableCharge = (startedAt) => {
-    if (!startedAt) return 0;
-
-    const elapsedSeconds = getElapsedSeconds(startedAt);
+  const calculateTableCharge = (table) => {
+    const elapsedSeconds = getElapsedSeconds(table);
     const elapsedMinutes = Math.ceil(elapsedSeconds / 60);
 
     if (elapsedMinutes <= 0) return 0;
@@ -164,7 +228,7 @@ function TablesSidebar({ onAddTableCharge, tableRentalProduct, onNotify }) {
       return;
     }
 
-    if (!table.startedAt) {
+    if (!table.startedAtMs) {
       notify("La mesa no tiene hora de inicio registrada.", "warning");
       return;
     }
@@ -176,20 +240,14 @@ function TablesSidebar({ onAddTableCharge, tableRentalProduct, onNotify }) {
 
       const data = response.data || {};
 
-      const total =
-        data.total ??
-        data.Total ??
-        calculateTableCharge(table.startedAt);
+      const total = data.total ?? data.Total ?? calculateTableCharge(table);
 
       const totalMinutes =
         data.totalMinutes ??
         data.TotalMinutes ??
-        Math.ceil(getElapsedSeconds(table.startedAt) / 60);
+        Math.ceil(getElapsedSeconds(table) / 60);
 
-      const tableName =
-        data.name ??
-        data.Name ??
-        `Mesa ${table.tableNumber}`;
+      const tableName = data.name ?? data.Name ?? `Mesa ${table.tableNumber}`;
 
       await onAddTableCharge({
         productId: tableRentalProduct?.productId ?? null,
@@ -243,11 +301,8 @@ function TablesSidebar({ onAddTableCharge, tableRentalProduct, onNotify }) {
           tables.map((table) => {
             const isOccupied = table.status === "occupied";
             const isCarambola = table.tableType === "carambola";
-            const elapsedSeconds = getElapsedSeconds(table.startedAt);
-            const amount = isOccupied
-              ? calculateTableCharge(table.startedAt)
-              : 0;
-
+            const elapsedSeconds = getElapsedSeconds(table);
+            const amount = isOccupied ? calculateTableCharge(table) : 0;
             const isLoading = loadingTableId === table.poolTableId;
 
             return (
