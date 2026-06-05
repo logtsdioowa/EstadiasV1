@@ -5,12 +5,17 @@ import ProductCard from "../components/ProductCard";
 function ProductsPage() {
   const [products, setProducts] = useState([]);
   const [categoriesList, setCategoriesList] = useState([]);
+  const [inventoryBaseProducts, setInventoryBaseProducts] = useState([]);
 
   const [showProductForm, setShowProductForm] = useState(false);
+  const [showBottleForm, setShowBottleForm] = useState(false);
   const [editingProductId, setEditingProductId] = useState(null);
 
   const [selectedImageFile, setSelectedImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
+
+  const [selectedBottleImageFile, setSelectedBottleImageFile] = useState(null);
+  const [bottleImagePreview, setBottleImagePreview] = useState("");
 
   const [toast, setToast] = useState(null);
 
@@ -21,23 +26,48 @@ function ProductsPage() {
     onConfirm: null,
   });
 
-const [newProduct, setNewProduct] = useState({
-  name: "",
-  description: "",
-  categoryId: "",
-  price: "",
-  stock: "",
-  minStock: "10",
-  trackInventory: true,
-  requiresBeerSelection: false,
-  isBeer: false,
-  imageUrl: "",
-  productType: "INDIVIDUAL",
-});
+  const [newProduct, setNewProduct] = useState({
+    name: "",
+    description: "",
+    categoryId: "",
+    price: "",
+    stock: "",
+    minStock: "10",
+    trackInventory: true,
+    requiresBeerSelection: false,
+    imageUrl: "",
+    inventorySourceProductId: "",
+    inventoryMultiplier: "1",
+    bottleVolumeMl: "",
+    servingVolumeMl: "",
+    productType: "BOTTLED_DRINK",
+  });
+
+  const [drinkSizes, setDrinkSizes] = useState([]);
+
+  const [drinkSizeForm, setDrinkSizeForm] = useState({
+    sizeName: "",
+    ouncesUsed: "",
+    price: "",
+    inventorySourceProductId: "",
+    imageFile: null,
+    imagePreview: "",
+    imageUrl: "",
+  });
+
+  const [bottleForm, setBottleForm] = useState({
+    name: "",
+    description: "",
+    bottleCategoryId: "",
+    initialBottleStock: "",
+    bottleVolumeMl: "1000",
+    imageUrl: "",
+  });
 
   useEffect(() => {
     loadProducts();
     loadCategories();
+    loadInventoryBaseProducts();
   }, []);
 
   const showToast = (message, type = "success") => {
@@ -48,30 +78,92 @@ const [newProduct, setNewProduct] = useState({
     }, 2500);
   };
 
-  const resetProductForm = () => {
-    setNewProduct({
-      name: "",
-      description: "",
-      categoryId:
-        categoriesList.length > 0 ? categoriesList[0].categoryId : "",
-      price: "",
-      stock: "",
-      minStock: "10",
-      trackInventory: true,
-      requiresBeerSelection: false,
-      isBeer: false,
-      imageUrl: "",
-      productType: "INDIVIDUAL",
-    });
+  const normalizeApiError = (error, fallbackMessage) => {
+    if (error.response && error.response.data) {
+      return (
+        error.response.data.message ||
+        error.response.data.Message ||
+        error.response.data
+      );
+    }
 
-    setEditingProductId(null);
-    setSelectedImageFile(null);
-    setImagePreview("");
+    return fallbackMessage;
+  };
+
+  const normalizeText = (value) => {
+    return (value || "").toString().toLowerCase().trim();
+  };
+
+  const getImageUrl = (imageUrl) => {
+    if (!imageUrl) return "";
+
+    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+      return imageUrl;
+    }
+
+    const baseUrl = api.defaults.baseURL.replace("/api", "");
+    return `${baseUrl}${imageUrl}`;
+  };
+
+  const isBottleCategoryName = (name) => {
+    return normalizeText(name) === "botellas";
+  };
+
+  const productCategoriesList = categoriesList.filter(
+    (category) => !isBottleCategoryName(category.name)
+  );
+
+  const bottleCategoryOptions = categoriesList.filter((category) =>
+    isBottleCategoryName(category.name)
+  );
+
+  const finalBottleCategoryOptions =
+    bottleCategoryOptions.length > 0 ? bottleCategoryOptions : categoriesList;
+
+  const isBeerCategory = (categoryId) => {
+    const selectedCategory = categoriesList.find(
+      (category) => Number(category.categoryId) === Number(categoryId)
+    );
+
+    if (!selectedCategory) return false;
+
+    return normalizeText(selectedCategory.name) === "cervezas";
+  };
+
+  const isLiquorProductType = (productType) => {
+    return productType === "SHOT" || productType === "LIQUOR_DRINK";
+  };
+
+  const isBeerSelectionProductType = (productType) => {
+    return productType === "PREPARED_DRINK" || productType === "BEER_BUCKET";
+  };
+
+  const isDrinkSizeProductType = (productType) => {
+    return productType === "LIQUOR_DRINK" || productType === "SHOT";
+  };
+
+  const hasOwnInventoryFields = (productType) => {
+    return productType === "BOTTLED_DRINK" || productType === "PACK";
+  };
+
+  const isCigaretteUnit = (productType) => {
+    return productType === "CIGARETTE_UNIT";
+  };
+
+  const getMinimumDrinkSizePrice = () => {
+    if (drinkSizes.length === 0) return 0;
+    return Math.min(...drinkSizes.map((size) => Number(size.price || 0)));
+  };
+
+  const getBottleInventoryOptions = () => {
+    return inventoryBaseProducts.filter((product) => {
+      return Number(product.bottleVolumeMl || 0) > 0;
+    });
   };
 
   const loadProducts = async () => {
     try {
-      const response = await api.get("/Products");
+      const response = await api.get("/Products/Admin");
 
       const normalizedProducts = response.data.map((p) => ({
         productId: p.productId ?? p.ProductId,
@@ -80,14 +172,20 @@ const [newProduct, setNewProduct] = useState({
         category: p.category ?? p.Category,
         price: p.price ?? p.Price,
         stock: p.stock ?? p.Stock ?? 0,
+        baseStock: p.baseStock ?? p.BaseStock ?? null,
         minStock: p.minStock ?? p.MinStock ?? 0,
         trackInventory: p.trackInventory ?? p.TrackInventory ?? false,
         requiresBeerSelection:
           p.requiresBeerSelection ?? p.RequiresBeerSelection ?? false,
         isBeer: p.isBeer ?? p.IsBeer ?? false,
         inventoryStatus: p.inventoryStatus ?? p.InventoryStatus ?? "NO_TRACK",
-        imageUrl: p.imageUrl ?? p.ImageUrl,
-        productType: p.productType ?? p.ProductType,
+        imageUrl: getImageUrl(p.imageUrl ?? p.ImageUrl ?? ""),
+        productType: p.productType ?? p.ProductType ?? "BOTTLED_DRINK",
+        inventorySourceProductId:
+          p.inventorySourceProductId ?? p.InventorySourceProductId ?? "",
+        inventoryMultiplier: p.inventoryMultiplier ?? p.InventoryMultiplier ?? 1,
+        bottleVolumeMl: p.bottleVolumeMl ?? p.BottleVolumeMl ?? "",
+        servingVolumeMl: p.servingVolumeMl ?? p.ServingVolumeMl ?? "",
       }));
 
       setProducts(normalizedProducts);
@@ -109,10 +207,14 @@ const [newProduct, setNewProduct] = useState({
 
       setCategoriesList(normalizedCategories);
 
-      if (normalizedCategories.length > 0) {
+      const firstProductCategory = normalizedCategories.find(
+        (category) => !isBottleCategoryName(category.name)
+      );
+
+      if (firstProductCategory) {
         setNewProduct((prev) => ({
           ...prev,
-          categoryId: prev.categoryId || normalizedCategories[0].categoryId,
+          categoryId: prev.categoryId || firstProductCategory.categoryId,
         }));
       }
     } catch (error) {
@@ -121,13 +223,379 @@ const [newProduct, setNewProduct] = useState({
     }
   };
 
+  const loadInventoryBaseProducts = async () => {
+    try {
+      const response = await api.get("/Products/Inventory");
+
+      const baseProducts = response.data
+        .filter((p) => {
+          const productType = p.productType ?? p.ProductType;
+          return productType === "INVENTORY_BASE";
+        })
+        .map((p) => ({
+          productId: p.productId ?? p.ProductId,
+          name: p.name ?? p.Name,
+          stock: p.stock ?? p.Stock ?? 0,
+          baseStock: p.baseStock ?? p.BaseStock ?? null,
+          category: p.category ?? p.Category,
+          bottleVolumeMl: p.bottleVolumeMl ?? p.BottleVolumeMl ?? null,
+          imageUrl: getImageUrl(p.imageUrl ?? p.ImageUrl ?? ""),
+        }));
+
+      setInventoryBaseProducts(baseProducts);
+    } catch (error) {
+      console.error("Error al cargar productos base:", error);
+      showToast("No se pudieron cargar los productos base.", "error");
+    }
+  };
+
+  const loadProductDrinkSizes = async (productId) => {
+    try {
+      const response = await api.get(`/Products/${productId}/DrinkSizes`);
+
+      const normalizedSizes = response.data.map((size) => ({
+        productDrinkSizeId:
+          size.productDrinkSizeId ?? size.ProductDrinkSizeId ?? null,
+        productId: size.productId ?? size.ProductId ?? productId,
+        sizeName: size.sizeName ?? size.SizeName ?? "",
+        ouncesUsed: size.ouncesUsed ?? size.OuncesUsed ?? "",
+        price: size.price ?? size.Price ?? "",
+        inventorySourceProductId:
+          size.inventorySourceProductId ??
+          size.InventorySourceProductId ??
+          "",
+        imageUrl: size.imageUrl ?? size.ImageUrl ?? "",
+        imagePreview: getImageUrl(size.imageUrl ?? size.ImageUrl ?? ""),
+        imageFile: null,
+      }));
+
+      setDrinkSizes(normalizedSizes);
+    } catch (error) {
+      console.error("Error al cargar tamaños de bebida:", error);
+      setDrinkSizes([]);
+    }
+  };
+
+  const resetDrinkSizeForm = () => {
+    setDrinkSizeForm({
+      sizeName: "",
+      ouncesUsed: "",
+      price: "",
+      inventorySourceProductId: "",
+      imageFile: null,
+      imagePreview: "",
+      imageUrl: "",
+    });
+  };
+
+  const resetProductForm = () => {
+    const firstProductCategory = categoriesList.find(
+      (category) => !isBottleCategoryName(category.name)
+    );
+
+    setNewProduct({
+      name: "",
+      description: "",
+      categoryId: firstProductCategory ? firstProductCategory.categoryId : "",
+      price: "",
+      stock: "",
+      minStock: "10",
+      trackInventory: true,
+      requiresBeerSelection: false,
+      imageUrl: "",
+      inventorySourceProductId: "",
+      inventoryMultiplier: "1",
+      bottleVolumeMl: "",
+      servingVolumeMl: "",
+      productType: "BOTTLED_DRINK",
+    });
+
+    setDrinkSizes([]);
+    resetDrinkSizeForm();
+    setEditingProductId(null);
+    setSelectedImageFile(null);
+    setImagePreview("");
+  };
+
+  const resetBottleForm = () => {
+    setBottleForm({
+      name: "",
+      description: "",
+      bottleCategoryId: "",
+      initialBottleStock: "",
+      bottleVolumeMl: "1000",
+      imageUrl: "",
+    });
+
+    setSelectedBottleImageFile(null);
+    setBottleImagePreview("");
+  };
+
   const handleNewProductChange = (e) => {
     const { name, value, type, checked } = e.target;
 
-    setNewProduct((prev) => ({
+    setNewProduct((prev) => {
+      const nextValue = type === "checkbox" ? checked : value;
+
+      const updated = {
+        ...prev,
+        [name]: nextValue,
+      };
+
+      if (name === "productType") {
+        if (!isDrinkSizeProductType(value)) {
+          setDrinkSizes([]);
+          resetDrinkSizeForm();
+        }
+
+        if (value === "BOTTLED_DRINK" || value === "PACK") {
+          updated.trackInventory = true;
+          updated.requiresBeerSelection = false;
+          updated.inventorySourceProductId = "";
+          updated.inventoryMultiplier = "1";
+          updated.bottleVolumeMl = "";
+          updated.servingVolumeMl = "";
+          updated.minStock = updated.minStock || "10";
+        }
+
+        if (value === "PREPARED_DRINK") {
+          updated.trackInventory = false;
+          updated.requiresBeerSelection = true;
+          updated.stock = "";
+          updated.minStock = "0";
+          updated.inventorySourceProductId = "";
+          updated.inventoryMultiplier = "1";
+          updated.bottleVolumeMl = "";
+          updated.servingVolumeMl = "";
+        }
+
+        if (value === "BEER_BUCKET") {
+          updated.trackInventory = false;
+          updated.requiresBeerSelection = true;
+          updated.stock = "";
+          updated.minStock = "0";
+          updated.inventorySourceProductId = "";
+          updated.inventoryMultiplier = "10";
+          updated.bottleVolumeMl = "";
+          updated.servingVolumeMl = "";
+        }
+
+        if (value === "LIQUOR_DRINK" || value === "SHOT") {
+          updated.trackInventory = false;
+          updated.requiresBeerSelection = false;
+          updated.price = "";
+          updated.stock = "";
+          updated.minStock = "0";
+          updated.inventorySourceProductId = "";
+          updated.inventoryMultiplier = "1";
+          updated.bottleVolumeMl = "";
+          updated.servingVolumeMl = "";
+        }
+
+        if (value === "CIGARETTE_UNIT") {
+          updated.trackInventory = true;
+          updated.requiresBeerSelection = false;
+          updated.stock = "0";
+          updated.minStock = "0";
+          updated.inventoryMultiplier = "0.05";
+          updated.bottleVolumeMl = "";
+          updated.servingVolumeMl = "";
+        }
+
+        if (value === "SERVICE") {
+          updated.trackInventory = false;
+          updated.requiresBeerSelection = false;
+          updated.stock = "";
+          updated.minStock = "0";
+          updated.inventorySourceProductId = "";
+          updated.inventoryMultiplier = "1";
+          updated.bottleVolumeMl = "";
+          updated.servingVolumeMl = "";
+        }
+      }
+
+      if (name === "categoryId") {
+        const selectedCategory = categoriesList.find(
+          (category) => Number(category.categoryId) === Number(value)
+        );
+
+        if (normalizeText(selectedCategory?.name) === "cervezas") {
+          updated.trackInventory = true;
+          updated.requiresBeerSelection = false;
+          updated.productType = "BOTTLED_DRINK";
+          updated.inventorySourceProductId = "";
+          updated.inventoryMultiplier = "1";
+          updated.bottleVolumeMl = "";
+          updated.servingVolumeMl = "";
+          setDrinkSizes([]);
+          resetDrinkSizeForm();
+        }
+      }
+
+      return updated;
+    });
+  };
+
+  const handleDrinkSizeFormChange = (field, value) => {
+    setDrinkSizeForm((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [field]: value,
     }));
+  };
+
+  const handleDrinkSizeImageChange = (e) => {
+    const file = e.target.files[0];
+
+    if (!file) {
+      setDrinkSizeForm((prev) => ({
+        ...prev,
+        imageFile: null,
+        imagePreview: "",
+        imageUrl: "",
+      }));
+      return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      showToast("Formato no permitido. Usa JPG, PNG o WEBP.", "warning");
+      e.target.value = "";
+      return;
+    }
+
+    setDrinkSizeForm((prev) => ({
+      ...prev,
+      imageFile: file,
+      imagePreview: URL.createObjectURL(file),
+      imageUrl: "",
+    }));
+  };
+
+  const handleDrinkSizeItemImageChange = (indexToUpdate, file) => {
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      showToast("Formato no permitido. Usa JPG, PNG o WEBP.", "warning");
+      return;
+    }
+
+    setDrinkSizes((prev) =>
+      prev.map((size, index) =>
+        index === indexToUpdate
+          ? {
+              ...size,
+              imageFile: file,
+              imagePreview: URL.createObjectURL(file),
+              imageUrl: "",
+            }
+          : size
+      )
+    );
+  };
+
+  const addDrinkSize = () => {
+    const sizeName = drinkSizeForm.sizeName.trim();
+    const ouncesUsed = Number(drinkSizeForm.ouncesUsed || 0);
+    const price = Number(drinkSizeForm.price || 0);
+    const inventorySourceProductId = drinkSizeForm.inventorySourceProductId;
+
+    if (!sizeName) {
+      showToast("Ingresa el nombre del tamaño.", "warning");
+      return;
+    }
+
+    if (ouncesUsed <= 0) {
+      showToast("Las onzas usadas deben ser mayores a cero.", "warning");
+      return;
+    }
+
+    if (price <= 0) {
+      showToast("El precio debe ser mayor a cero.", "warning");
+      return;
+    }
+
+    if (!inventorySourceProductId) {
+      showToast("Selecciona la botella que se descontará.", "warning");
+      return;
+    }
+
+    const duplicatedSize = drinkSizes.some(
+      (size) => normalizeText(size.sizeName) === normalizeText(sizeName)
+    );
+
+    if (duplicatedSize) {
+      showToast("Ya existe un tamaño con ese nombre.", "warning");
+      return;
+    }
+
+    setDrinkSizes((prev) => [
+      ...prev,
+      {
+        sizeName,
+        ouncesUsed,
+        price,
+        inventorySourceProductId: Number(inventorySourceProductId),
+        imageFile: drinkSizeForm.imageFile,
+        imagePreview: drinkSizeForm.imagePreview,
+        imageUrl: drinkSizeForm.imageUrl,
+      },
+    ]);
+
+    resetDrinkSizeForm();
+  };
+
+  const updateDrinkSize = (indexToUpdate, field, value) => {
+    setDrinkSizes((prev) =>
+      prev.map((size, index) =>
+        index === indexToUpdate
+          ? {
+              ...size,
+              [field]: field === "sizeName" ? value : Number(value || 0),
+            }
+          : size
+      )
+    );
+  };
+
+  const removeDrinkSize = (indexToRemove) => {
+    setDrinkSizes((prev) =>
+      prev.filter((_, index) => index !== indexToRemove)
+    );
+  };
+
+  const handleBottleFormChange = (e) => {
+    const { name, value } = e.target;
+
+    setBottleForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleBottleImageChange = (e) => {
+    const file = e.target.files[0];
+
+    if (!file) {
+      setSelectedBottleImageFile(null);
+      setBottleImagePreview("");
+      return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      showToast("Formato no permitido. Usa JPG, PNG o WEBP.", "warning");
+      e.target.value = "";
+      setSelectedBottleImageFile(null);
+      setBottleImagePreview("");
+      return;
+    }
+
+    setSelectedBottleImageFile(file);
+    setBottleImagePreview(URL.createObjectURL(file));
   };
 
   const handleImageChange = (e) => {
@@ -153,13 +621,11 @@ const [newProduct, setNewProduct] = useState({
     setImagePreview(URL.createObjectURL(file));
   };
 
-  const uploadProductImage = async () => {
-    if (!selectedImageFile) {
-      return newProduct.imageUrl || null;
-    }
+  const uploadImageFile = async (file) => {
+    if (!file) return null;
 
     const formData = new FormData();
-    formData.append("file", selectedImageFile);
+    formData.append("file", file);
 
     const response = await api.post("/Images/UploadProductImage", formData, {
       headers: {
@@ -170,89 +636,301 @@ const [newProduct, setNewProduct] = useState({
     return response.data.imageUrl ?? response.data.ImageUrl;
   };
 
-  const saveProduct = async () => {
-    if (!newProduct.name.trim()) {
-      showToast("El nombre del producto es obligatorio.", "warning");
-      return;
+  const uploadProductImage = async () => {
+    if (!selectedImageFile) {
+      return newProduct.imageUrl || null;
     }
 
-    if (Number(newProduct.price) <= 0) {
-      showToast("El precio debe ser mayor a cero.", "warning");
-      return;
+    return await uploadImageFile(selectedImageFile);
+  };
+
+  const uploadBottleImage = async () => {
+    if (!selectedBottleImageFile) {
+      return bottleForm.imageUrl || null;
+    }
+
+    return await uploadImageFile(selectedBottleImageFile);
+  };
+
+  const uploadDrinkSizeImages = async () => {
+    const uploadedSizes = [];
+
+    for (const size of drinkSizes) {
+      let imageUrl = size.imageUrl || "";
+
+      if (size.imageFile) {
+        imageUrl = await uploadImageFile(size.imageFile);
+      }
+
+      uploadedSizes.push({
+        ...size,
+        imageUrl,
+      });
+    }
+
+    return uploadedSizes;
+  };
+
+  const prepareBottleForm = () => {
+    const bottleCategory = categoriesList.find((category) =>
+      isBottleCategoryName(category.name)
+    );
+
+    setBottleForm((prev) => ({
+      ...prev,
+      bottleCategoryId: bottleCategory?.categoryId || "",
+    }));
+
+    setShowProductForm(false);
+    setEditingProductId(null);
+    setShowBottleForm(true);
+  };
+
+  const validateBottleForm = () => {
+    if (!bottleForm.name.trim()) {
+      showToast("El nombre de la botella es obligatorio.", "warning");
+      return false;
+    }
+
+    if (!bottleForm.bottleCategoryId) {
+      showToast("Selecciona la categoría de botella.", "warning");
+      return false;
+    }
+
+    if (Number(bottleForm.initialBottleStock) < 0) {
+      showToast(
+        "La cantidad inicial de botellas no puede ser negativa.",
+        "warning"
+      );
+      return false;
+    }
+
+    if (Number(bottleForm.bottleVolumeMl) <= 0) {
+      showToast(
+        "El tamaño de la botella en mililitros debe ser mayor a cero.",
+        "warning"
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  const validateDrinkSizes = () => {
+    if (!isDrinkSizeProductType(newProduct.productType)) {
+      return true;
+    }
+
+    if (drinkSizes.length === 0) {
+      showToast("Agrega al menos un tamaño para la bebida.", "warning");
+      return false;
+    }
+
+    const invalidSize = drinkSizes.find(
+      (size) =>
+        !String(size.sizeName || "").trim() ||
+        Number(size.ouncesUsed || 0) <= 0 ||
+        Number(size.price || 0) <= 0 ||
+        !size.inventorySourceProductId
+    );
+
+    if (invalidSize) {
+      showToast(
+        "Todos los tamaños deben tener nombre, onzas, precio y botella seleccionada.",
+        "warning"
+      );
+      return false;
+    }
+
+    const duplicatedNames = drinkSizes.some((size, index) =>
+      drinkSizes.some(
+        (otherSize, otherIndex) =>
+          index !== otherIndex &&
+          normalizeText(size.sizeName) === normalizeText(otherSize.sizeName)
+      )
+    );
+
+    if (duplicatedNames) {
+      showToast("No debe haber tamaños con el mismo nombre.", "warning");
+      return false;
+    }
+
+    return true;
+  };
+
+  const validateProductForm = () => {
+    if (!newProduct.name.trim()) {
+      showToast("El nombre del producto es obligatorio.", "warning");
+      return false;
     }
 
     if (!newProduct.categoryId) {
       showToast("Selecciona una categoría válida.", "warning");
-      return;
+      return false;
     }
 
-    let uploadedImageUrl = newProduct.imageUrl || null;
+    const selectedCategory = categoriesList.find(
+      (category) => Number(category.categoryId) === Number(newProduct.categoryId)
+    );
 
-    try {
-      uploadedImageUrl = await uploadProductImage();
-    } catch (error) {
-      console.error("Error al subir imagen:", error);
-      showToast("No se pudo subir la imagen del producto.", "error");
-      return;
+    if (isBottleCategoryName(selectedCategory?.name)) {
+      showToast(
+        "La categoría Botellas solo debe usarse desde el botón Agregar botella.",
+        "warning"
+      );
+      return false;
     }
 
-   const productData = {
-      name: newProduct.name,
+    if (!isDrinkSizeProductType(newProduct.productType)) {
+      if (Number(newProduct.price) <= 0) {
+        showToast("El precio debe ser mayor a cero.", "warning");
+        return false;
+      }
+    }
+
+    if (!validateDrinkSizes()) {
+      return false;
+    }
+
+    if (isCigaretteUnit(newProduct.productType)) {
+      if (!newProduct.inventorySourceProductId) {
+        showToast("Selecciona el inventario base de cajetillas.", "warning");
+        return false;
+      }
+
+      if (Number(newProduct.inventoryMultiplier || 0) <= 0) {
+        showToast("El descuento por cigarro debe ser mayor a cero.", "warning");
+        return false;
+      }
+    }
+
+    if (
+      hasOwnInventoryFields(newProduct.productType) &&
+      Number(newProduct.inventoryMultiplier || 1) <= 0
+    ) {
+      showToast(
+        "El multiplicador de inventario debe ser mayor a cero.",
+        "warning"
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  const buildProductData = async () => {
+    const uploadedImageUrl = await uploadProductImage();
+
+    const isLiquorType = isLiquorProductType(newProduct.productType);
+    const isBeerSelectionType = isBeerSelectionProductType(
+      newProduct.productType
+    );
+    const isBeerBucket = newProduct.productType === "BEER_BUCKET";
+    const hasOwnInventory = hasOwnInventoryFields(newProduct.productType);
+    const cigaretteUnit = isCigaretteUnit(newProduct.productType);
+    const hasDrinkSizes = isDrinkSizeProductType(newProduct.productType);
+
+    return {
+      name: newProduct.name.trim(),
       description: newProduct.description,
       categoryId: Number(newProduct.categoryId),
-      price: Number(newProduct.price),
-      stock: newProduct.trackInventory ? Number(newProduct.stock || 0) : 0,
-      minStock: newProduct.trackInventory
-        ? Number(newProduct.minStock || 0)
-        : 0,
-      trackInventory: Boolean(newProduct.trackInventory),
-      requiresBeerSelection: Boolean(newProduct.requiresBeerSelection),
-      isBeer: Boolean(newProduct.isBeer),
+
+      price: hasDrinkSizes
+        ? Number(getMinimumDrinkSizePrice() || 0)
+        : Number(newProduct.price || 0),
+
+      stock:
+        hasOwnInventory && newProduct.trackInventory
+          ? Number(newProduct.stock || 0)
+          : 0,
+
+      minStock:
+        hasOwnInventory && newProduct.trackInventory
+          ? Number(newProduct.minStock || 0)
+          : 0,
+
+      trackInventory: cigaretteUnit
+        ? true
+        : isLiquorType
+        ? false
+        : isBeerSelectionType
+        ? false
+        : hasOwnInventory
+        ? Boolean(newProduct.trackInventory)
+        : false,
+
+      requiresBeerSelection: isBeerSelectionType,
+
+      isBeer: isBeerCategory(newProduct.categoryId),
+
+      inventorySourceProductId: cigaretteUnit
+        ? Number(newProduct.inventorySourceProductId)
+        : hasOwnInventory && newProduct.inventorySourceProductId
+        ? Number(newProduct.inventorySourceProductId)
+        : null,
+
+      inventoryMultiplier: isBeerBucket
+        ? 10
+        : cigaretteUnit
+        ? Number(newProduct.inventoryMultiplier || 0.05)
+        : hasOwnInventory
+        ? Number(newProduct.inventoryMultiplier || 1)
+        : 1,
+
+      bottleVolumeMl: null,
+      servingVolumeMl: null,
       imageUrl: uploadedImageUrl,
       productType: newProduct.productType,
     };
+  };
+
+  const saveDrinkSizesForProduct = async (productId) => {
+    if (!isDrinkSizeProductType(newProduct.productType)) {
+      return;
+    }
+
+    const uploadedSizes = await uploadDrinkSizeImages();
+
+    const sizesPayload = uploadedSizes.map((size) => ({
+      sizeName: String(size.sizeName || "").trim(),
+      ouncesUsed: Number(size.ouncesUsed || 0),
+      price: Number(size.price || 0),
+      imageUrl: size.imageUrl || null,
+      inventorySourceProductId: size.inventorySourceProductId
+        ? Number(size.inventorySourceProductId)
+        : null,
+    }));
+
+    await api.post(`/Products/${productId}/DrinkSizes`, sizesPayload);
+  };
+
+  const saveProduct = async () => {
+    if (!validateProductForm()) return;
 
     try {
-      await api.post("/Products", productData);
+      const productData = await buildProductData();
+      const response = await api.post("/Products", productData);
+
+      const createdProductId =
+        response.data.productId ?? response.data.ProductId;
+
+      if (createdProductId) {
+        await saveDrinkSizesForProduct(createdProductId);
+      }
 
       showToast("Producto agregado correctamente.", "success");
 
       resetProductForm();
       setShowProductForm(false);
-      loadProducts();
+      await loadProducts();
+      await loadInventoryBaseProducts();
     } catch (error) {
       console.error("Error al agregar producto:", error);
-
-      if (error.response && error.response.data) {
-        showToast(error.response.data.message || error.response.data, "error");
-      } else {
-        showToast("No se pudo agregar el producto.", "error");
-      }
+      showToast(
+        normalizeApiError(error, "No se pudo agregar el producto."),
+        "error"
+      );
     }
-  };
-
-  const startEditProduct = (product) => {
-    const category = categoriesList.find((c) => c.name === product.category);
-
-    setEditingProductId(product.productId);
-
-   setNewProduct({
-      name: product.name || "",
-      description: product.description || "",
-      categoryId: category ? category.categoryId : "",
-      price: product.price || "",
-      stock: product.stock ?? "",
-      minStock: product.minStock ?? "10",
-      trackInventory: product.trackInventory ?? true,
-      requiresBeerSelection: product.requiresBeerSelection ?? false,
-      isBeer: product.isBeer ?? false,
-      imageUrl: product.imageUrl || "",
-      productType: product.productType || "INDIVIDUAL",
-    });
-
-    setSelectedImageFile(null);
-    setImagePreview(product.imageUrl || "");
-    setShowProductForm(true);
   };
 
   const updateProduct = async () => {
@@ -261,64 +939,96 @@ const [newProduct, setNewProduct] = useState({
       return;
     }
 
-    if (!newProduct.name.trim()) {
-      showToast("El nombre del producto es obligatorio.", "warning");
-      return;
-    }
-
-    if (Number(newProduct.price) <= 0) {
-      showToast("El precio debe ser mayor a cero.", "warning");
-      return;
-    }
-
-    if (!newProduct.categoryId) {
-      showToast("Selecciona una categoría válida.", "warning");
-      return;
-    }
-
-    let uploadedImageUrl = newProduct.imageUrl || null;
+    if (!validateProductForm()) return;
 
     try {
-      uploadedImageUrl = await uploadProductImage();
-    } catch (error) {
-      console.error("Error al subir imagen:", error);
-      showToast("No se pudo subir la imagen del producto.", "error");
-      return;
-    }
-    const productData = {
-      name: newProduct.name,
-      description: newProduct.description,
-      categoryId: Number(newProduct.categoryId),
-      price: Number(newProduct.price),
-      stock: newProduct.trackInventory ? Number(newProduct.stock || 0) : 0,
-      minStock: newProduct.trackInventory
-        ? Number(newProduct.minStock || 0)
-        : 0,
-      trackInventory: Boolean(newProduct.trackInventory),
-      requiresBeerSelection: Boolean(newProduct.requiresBeerSelection),
-      isBeer: Boolean(newProduct.isBeer),
-      imageUrl: uploadedImageUrl,
-      productType: newProduct.productType,
-    };
-    
+      const productData = await buildProductData();
 
-    try {
       await api.put(`/Products/${editingProductId}`, productData);
+      await saveDrinkSizesForProduct(editingProductId);
 
       showToast("Producto actualizado correctamente.", "success");
 
       resetProductForm();
       setShowProductForm(false);
-      loadProducts();
+      await loadProducts();
+      await loadInventoryBaseProducts();
     } catch (error) {
       console.error("Error al actualizar producto:", error);
-
-      if (error.response && error.response.data) {
-        showToast(error.response.data.message || error.response.data, "error");
-      } else {
-        showToast("No se pudo actualizar el producto.", "error");
-      }
+      showToast(
+        normalizeApiError(error, "No se pudo actualizar el producto."),
+        "error"
+      );
     }
+  };
+
+  const saveBottle = async (e) => {
+    e.preventDefault();
+
+    if (!validateBottleForm()) return;
+
+    try {
+      const uploadedImageUrl = await uploadBottleImage();
+
+      const payload = {
+        name: bottleForm.name.trim(),
+        description: bottleForm.description,
+        bottleCategoryId: Number(bottleForm.bottleCategoryId),
+        initialBottleStock: Number(bottleForm.initialBottleStock || 0),
+        bottleVolumeMl: Number(bottleForm.bottleVolumeMl || 0),
+        imageUrl: uploadedImageUrl,
+      };
+
+      await api.post("/Products/Bottle", payload);
+
+      showToast("Botella e inventario base creados correctamente.", "success");
+
+      resetBottleForm();
+      setShowBottleForm(false);
+      await loadProducts();
+      await loadInventoryBaseProducts();
+    } catch (error) {
+      console.error("Error al crear botella:", error);
+      showToast(
+        normalizeApiError(error, "No se pudo crear la botella."),
+        "error"
+      );
+    }
+  };
+
+  const startEditProduct = async (product) => {
+    const category = categoriesList.find((c) => c.name === product.category);
+
+    setEditingProductId(product.productId);
+
+    setNewProduct({
+      name: product.name || "",
+      description: product.description || "",
+      categoryId: category ? category.categoryId : "",
+      price: isDrinkSizeProductType(product.productType) ? "" : product.price ?? "",
+      stock: product.stock ?? "",
+      minStock: product.minStock ?? "10",
+      trackInventory: product.trackInventory ?? true,
+      requiresBeerSelection: product.requiresBeerSelection ?? false,
+      imageUrl: product.imageUrl || "",
+      inventorySourceProductId: product.inventorySourceProductId ?? "",
+      inventoryMultiplier: product.inventoryMultiplier ?? "1",
+      bottleVolumeMl: product.bottleVolumeMl ?? "",
+      servingVolumeMl: product.servingVolumeMl ?? "",
+      productType: product.productType || "BOTTLED_DRINK",
+    });
+
+    setSelectedImageFile(null);
+    setImagePreview(product.imageUrl || "");
+
+    if (isDrinkSizeProductType(product.productType)) {
+      await loadProductDrinkSizes(product.productId);
+    } else {
+      setDrinkSizes([]);
+    }
+
+    setShowBottleForm(false);
+    setShowProductForm(true);
   };
 
   const openConfirmModal = ({ title, message, onConfirm }) => {
@@ -349,29 +1059,63 @@ const [newProduct, setNewProduct] = useState({
 
   const deleteProduct = async (product) => {
     openConfirmModal({
-      title: "Desactivar producto",
-      message: `¿Deseas desactivar el producto "${product.name}"? Esta acción lo ocultará del punto de venta.`,
+      title: "Eliminar producto",
+      message: `¿Deseas eliminar el producto "${product.name}"? Esta acción lo ocultará del sistema.`,
       onConfirm: async () => {
         try {
           await api.delete(`/Products/${product.productId}`);
 
-          showToast("Producto desactivado correctamente.", "success");
-          loadProducts();
+          showToast("Producto eliminado correctamente.", "success");
+          await loadProducts();
+          await loadInventoryBaseProducts();
         } catch (error) {
-          console.error("Error al desactivar producto:", error);
-
-          if (error.response && error.response.data) {
-            showToast(
-              error.response.data.message || error.response.data,
-              "error"
-            );
-          } else {
-            showToast("No se pudo desactivar el producto.", "error");
-          }
+          console.error("Error al eliminar producto:", error);
+          showToast(
+            normalizeApiError(error, "No se pudo eliminar el producto."),
+            "error"
+          );
         }
       },
     });
   };
+
+  const categoryPriority = [
+    "Cervezas",
+    "Bebidas preparadas",
+    "Shots",
+    "Bebidas embotelladas",
+    "Snacks",
+    "Cigarros",
+    "Botellas",
+    "Otros",
+    "Sin categoría",
+  ];
+
+  const groupedProducts = products.reduce((groups, product) => {
+    const categoryName = product.category || "Sin categoría";
+
+    if (!groups[categoryName]) {
+      groups[categoryName] = [];
+    }
+
+    groups[categoryName].push(product);
+
+    return groups;
+  }, {});
+
+  const orderedCategoryNames = Object.keys(groupedProducts).sort((a, b) => {
+    const indexA = categoryPriority.indexOf(a);
+    const indexB = categoryPriority.indexOf(b);
+
+    const priorityA = indexA === -1 ? 999 : indexA;
+    const priorityB = indexB === -1 ? 999 : indexB;
+
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
+
+    return a.localeCompare(b);
+  });
 
   return (
     <div className="page-card">
@@ -386,7 +1130,10 @@ const [newProduct, setNewProduct] = useState({
             <p>{confirmModal.message}</p>
 
             <div className="modal-actions">
-              <button className="modal-cancel-button" onClick={closeConfirmModal}>
+              <button
+                className="modal-cancel-button"
+                onClick={closeConfirmModal}
+              >
                 Cancelar
               </button>
 
@@ -402,23 +1149,140 @@ const [newProduct, setNewProduct] = useState({
       )}
 
       <div className="pos-header">
-        <h1>Administración de productos</h1>
+        <h1>Productos</h1>
 
-        <button
-          className="add-product-button"
-          onClick={() => {
-            if (showProductForm) {
-              resetProductForm();
-              setShowProductForm(false);
-            } else {
-              resetProductForm();
-              setShowProductForm(true);
-            }
-          }}
-        >
-          {showProductForm ? "Cerrar" : "+ Producto"}
-        </button>
+        <div className="header-actions">
+          <button
+            type="button"
+            className="add-product-button"
+            onClick={() => {
+              setShowBottleForm(false);
+              setShowProductForm((prev) => !prev);
+
+              if (!showProductForm) {
+                resetProductForm();
+              }
+            }}
+          >
+            {showProductForm ? "Ocultar formulario" : "Agregar producto"}
+          </button>
+
+          <button
+            type="button"
+            className="add-product-button"
+            onClick={prepareBottleForm}
+          >
+            Agregar botella
+          </button>
+        </div>
       </div>
+
+      {showBottleForm && (
+        <form className="product-form" onSubmit={saveBottle}>
+          <h2>Agregar botella</h2>
+
+          <div className="form-grid">
+            <div>
+              <label>Nombre de la botella</label>
+              <input
+                type="text"
+                name="name"
+                value={bottleForm.name}
+                onChange={handleBottleFormChange}
+                placeholder="Ej. Oso Negro"
+              />
+            </div>
+
+            <div>
+              <label>Categoría de botella</label>
+              <select
+                name="bottleCategoryId"
+                value={bottleForm.bottleCategoryId}
+                onChange={handleBottleFormChange}
+              >
+                <option value="">Selecciona una categoría</option>
+
+                {finalBottleCategoryOptions.map((category) => (
+                  <option key={category.categoryId} value={category.categoryId}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label>Cantidad inicial de botellas</label>
+              <input
+                type="number"
+                name="initialBottleStock"
+                min="0"
+                step="0.01"
+                value={bottleForm.initialBottleStock}
+                onChange={handleBottleFormChange}
+                placeholder="Ej. 2"
+              />
+            </div>
+
+            <div>
+              <label>Tamaño de botella en ml</label>
+              <input
+                type="number"
+                name="bottleVolumeMl"
+                min="1"
+                step="1"
+                value={bottleForm.bottleVolumeMl}
+                onChange={handleBottleFormChange}
+                placeholder="Ej. 1000"
+              />
+            </div>
+
+            <div>
+              <label>Imagen</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleBottleImageChange}
+              />
+            </div>
+
+            <div className="full-field">
+              <label>Descripción</label>
+              <textarea
+                name="description"
+                value={bottleForm.description}
+                onChange={handleBottleFormChange}
+                placeholder="Descripción opcional"
+              />
+            </div>
+
+            {bottleImagePreview && (
+              <div className="full-field">
+                <label>Vista previa</label>
+                <div className="image-preview-box">
+                  <img src={bottleImagePreview} alt="Vista previa" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="form-actions">
+            <button type="submit" className="save-product-button">
+              Guardar botella
+            </button>
+
+            <button
+              type="button"
+              className="cancel-product-button"
+              onClick={() => {
+                resetBottleForm();
+                setShowBottleForm(false);
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
 
       {showProductForm && (
         <div className="product-form">
@@ -432,50 +1296,32 @@ const [newProduct, setNewProduct] = useState({
                 name="name"
                 value={newProduct.name}
                 onChange={handleNewProductChange}
-                placeholder="Ej. Agua embotellada"
               />
             </div>
 
-            <div>
-              <label>Precio</label>
-              <input
-                type="number"
-                name="price"
-                min="0"
-                step="0.01"
-                value={newProduct.price}
-                onChange={handleNewProductChange}
-                placeholder="Ej. 25.00"
-              />
-            </div>
+            {!isDrinkSizeProductType(newProduct.productType) && (
+              <div>
+                <label>Precio</label>
+                <input
+                  type="number"
+                  name="price"
+                  min="0"
+                  step="0.01"
+                  value={newProduct.price}
+                  onChange={handleNewProductChange}
+                />
+              </div>
+            )}
 
-            <div>
-              <label>Stock inicial / actual</label>
-              <input
-                type="number"
-                name="stock"
-                min="0"
-                step="1"
-                value={newProduct.stock}
-                onChange={handleNewProductChange}
-                placeholder="Ej. 20"
-                disabled={!newProduct.trackInventory}
-              />
-            </div>
-
-            <div>
-              <label>Stock mínimo</label>
-              <input
-                type="number"
-                name="minStock"
-                min="0"
-                step="1"
-                value={newProduct.minStock}
-                onChange={handleNewProductChange}
-                placeholder="Ej. 10"
-                disabled={!newProduct.trackInventory}
-              />
-            </div>
+            {isDrinkSizeProductType(newProduct.productType) && (
+              <div className="bottle-calculation-box">
+                <strong>Precio por tamaño</strong>
+                <p>
+                  El precio principal se tomará automáticamente del tamaño más
+                  barato registrado.
+                </p>
+              </div>
+            )}
 
             <div>
               <label>Categoría</label>
@@ -484,18 +1330,13 @@ const [newProduct, setNewProduct] = useState({
                 value={newProduct.categoryId}
                 onChange={handleNewProductChange}
               >
-                {categoriesList.length === 0 ? (
-                  <option value="">Sin categorías disponibles</option>
-                ) : (
-                  categoriesList.map((category) => (
-                    <option
-                      key={category.categoryId}
-                      value={category.categoryId}
-                    >
-                      {category.name}
-                    </option>
-                  ))
-                )}
+                <option value="">Selecciona una categoría</option>
+
+                {productCategoriesList.map((category) => (
+                  <option key={category.categoryId} value={category.categoryId}>
+                    {category.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -506,46 +1347,363 @@ const [newProduct, setNewProduct] = useState({
                 value={newProduct.productType}
                 onChange={handleNewProductChange}
               >
-                <option value="PREPARED_DRINK">Bebida preparada</option>
                 <option value="BOTTLED_DRINK">Bebida embotellada</option>
-                <option value="INDIVIDUAL">Producto individual</option>
+                <option value="PREPARED_DRINK">
+                  Bebida preparada con cerveza
+                </option>
+                <option value="LIQUOR_DRINK">
+                  Bebida preparada con licor
+                </option>
+                <option value="SHOT">Shot genérico</option>
+                <option value="BEER_BUCKET">Cubeta de cerveza</option>
+                <option value="PACK">Paquete / cajetilla</option>
+                <option value="CIGARETTE_UNIT">Cigarro suelto</option>
                 <option value="SERVICE">Servicio</option>
               </select>
             </div>
 
-            <div className="full-field checkbox-field">
-              <label>
-                <input
-                  type="checkbox"
-                  name="trackInventory"
-                  checked={newProduct.trackInventory}
-                  onChange={handleNewProductChange}
-                />
-                Controlar inventario de este producto
-              </label>
-            </div>
-            <div className="full-field checkbox-field">
-              <label>
-                <input
-                  type="checkbox"
-                  name="isBeer"
-                  checked={newProduct.isBeer}
-                  onChange={handleNewProductChange}
-                />
-                Este producto es una cerveza
-              </label>
-            </div>
+            {newProduct.productType === "PREPARED_DRINK" && (
+              <div className="full-field bottle-calculation-box">
+                <strong>Bebida preparada con cerveza</strong>
+                <p>
+                  Este producto no usa tamaños ni onzas. En el POS solo se
+                  selecciona la cerveza con la que se prepara y se descuenta una
+                  unidad de esa cerveza.
+                </p>
+              </div>
+            )}
 
-            <div className="full-field checkbox-field">
-              <label>
-                <input
-                  type="checkbox"
-                  name="requiresBeerSelection"
-                  checked={newProduct.requiresBeerSelection}
-                  onChange={handleNewProductChange}
-                />
-                Este producto requiere seleccionar cerveza al vender
-              </label>
+            {newProduct.productType === "BEER_BUCKET" && (
+              <div className="full-field bottle-calculation-box">
+                <strong>Cubeta de cerveza</strong>
+                <p>
+                  En el POS se selecciona la cerveza y se descuentan 10 unidades.
+                  Si el precio es $350, se mostrarán cervezas de $35; si es $400,
+                  se mostrarán cervezas de $40.
+                </p>
+              </div>
+            )}
+
+            {isDrinkSizeProductType(newProduct.productType) && (
+              <div className="full-field drink-sizes-section">
+                <div className="drink-sizes-header">
+                  <h3>Tamaños de bebida con licor</h3>
+                  <p>
+                    Agrega los tamaños que se venderán en POS. Cada tamaño debe
+                    tener nombre, onzas usadas, precio, botella de inventario e
+                    imagen.
+                  </p>
+                </div>
+
+                <div className="drink-size-form drink-size-form-extended">
+                  <input
+                    type="text"
+                    placeholder="Nombre del tamaño"
+                    value={drinkSizeForm.sizeName}
+                    onChange={(e) =>
+                      handleDrinkSizeFormChange("sizeName", e.target.value)
+                    }
+                  />
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Onzas usadas"
+                    value={drinkSizeForm.ouncesUsed}
+                    onChange={(e) =>
+                      handleDrinkSizeFormChange("ouncesUsed", e.target.value)
+                    }
+                  />
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Precio"
+                    value={drinkSizeForm.price}
+                    onChange={(e) =>
+                      handleDrinkSizeFormChange("price", e.target.value)
+                    }
+                  />
+
+                  <select
+                    value={drinkSizeForm.inventorySourceProductId}
+                    onChange={(e) =>
+                      handleDrinkSizeFormChange(
+                        "inventorySourceProductId",
+                        e.target.value
+                      )
+                    }
+                  >
+                    <option value="">Botella a descontar</option>
+
+                    {getBottleInventoryOptions().map((bottle) => (
+                      <option key={bottle.productId} value={bottle.productId}>
+                        {bottle.name} — Stock: {Number(bottle.stock || 0)}
+                      </option>
+                    ))}
+                  </select>
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleDrinkSizeImageChange}
+                  />
+
+                  <button
+                    type="button"
+                    className="add-drink-size-button"
+                    onClick={addDrinkSize}
+                  >
+                    Agregar tamaño
+                  </button>
+                </div>
+
+                {drinkSizeForm.imagePreview && (
+                  <div className="drink-size-preview">
+                    <img
+                      src={drinkSizeForm.imagePreview}
+                      alt="Vista previa del tamaño"
+                    />
+                  </div>
+                )}
+
+                {drinkSizes.length === 0 ? (
+                  <p className="empty-drink-sizes">
+                    No se han agregado tamaños para esta bebida.
+                  </p>
+                ) : (
+                  <div className="drink-sizes-list">
+                    {drinkSizes.map((size, index) => (
+                      <div
+                        className="drink-size-item drink-size-item-extended"
+                        key={`${size.sizeName}-${index}`}
+                      >
+                        <input
+                          type="text"
+                          value={size.sizeName}
+                          onChange={(e) =>
+                            updateDrinkSize(index, "sizeName", e.target.value)
+                          }
+                        />
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={size.ouncesUsed}
+                          onChange={(e) =>
+                            updateDrinkSize(
+                              index,
+                              "ouncesUsed",
+                              e.target.value
+                            )
+                          }
+                        />
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={size.price}
+                          onChange={(e) =>
+                            updateDrinkSize(index, "price", e.target.value)
+                          }
+                        />
+
+                        <select
+                          value={size.inventorySourceProductId || ""}
+                          onChange={(e) =>
+                            updateDrinkSize(
+                              index,
+                              "inventorySourceProductId",
+                              e.target.value
+                            )
+                          }
+                        >
+                          <option value="">Botella a descontar</option>
+
+                          {getBottleInventoryOptions().map((bottle) => (
+                            <option
+                              key={bottle.productId}
+                              value={bottle.productId}
+                            >
+                              {bottle.name} — Stock: {Number(bottle.stock || 0)}
+                            </option>
+                          ))}
+                        </select>
+
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) =>
+                            handleDrinkSizeItemImageChange(
+                              index,
+                              e.target.files[0]
+                            )
+                          }
+                        />
+
+                        {(size.imagePreview || size.imageUrl) && (
+                          <img
+                            className="drink-size-thumbnail"
+                            src={size.imagePreview || getImageUrl(size.imageUrl)}
+                            alt={size.sizeName}
+                          />
+                        )}
+
+                        <button
+                          type="button"
+                          className="remove-drink-size-button"
+                          onClick={() => removeDrinkSize(index)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {newProduct.productType === "CIGARETTE_UNIT" && (
+              <>
+                <div>
+                  <label>Inventario base de cajetillas</label>
+
+                  <select
+                    name="inventorySourceProductId"
+                    value={newProduct.inventorySourceProductId}
+                    onChange={handleNewProductChange}
+                  >
+                    <option value="">Selecciona inventario base</option>
+
+                    {inventoryBaseProducts
+                      .filter((product) => {
+                        const name = normalizeText(product.name);
+                        return !product.bottleVolumeMl && name.includes("cigarro");
+                      })
+                      .map((product) => (
+                        <option
+                          key={product.productId}
+                          value={product.productId}
+                        >
+                          {product.name} — Stock: {product.stock}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label>Descuento por cigarro</label>
+
+                  <input
+                    type="number"
+                    name="inventoryMultiplier"
+                    min="0.0001"
+                    step="0.0001"
+                    value={newProduct.inventoryMultiplier}
+                    onChange={handleNewProductChange}
+                    placeholder="Ej. 0.05"
+                  />
+                </div>
+
+                <div className="full-field bottle-calculation-box">
+                  <strong>Cigarro suelto</strong>
+                  <p>
+                    Si una cajetilla tiene 20 cigarros, cada cigarro debe
+                    descontar 0.05 cajetilla.
+                  </p>
+                </div>
+              </>
+            )}
+
+            {hasOwnInventoryFields(newProduct.productType) && (
+              <>
+                <div>
+                  <label>Stock</label>
+                  <input
+                    type="number"
+                    name="stock"
+                    min="0"
+                    step="0.01"
+                    value={newProduct.stock}
+                    onChange={handleNewProductChange}
+                    disabled={!newProduct.trackInventory}
+                  />
+                </div>
+
+                <div>
+                  <label>Stock mínimo</label>
+                  <input
+                    type="number"
+                    name="minStock"
+                    min="0"
+                    step="0.01"
+                    value={newProduct.minStock}
+                    onChange={handleNewProductChange}
+                    disabled={!newProduct.trackInventory}
+                  />
+                </div>
+
+                <div>
+                  <label>Inventario base</label>
+
+                  <select
+                    name="inventorySourceProductId"
+                    value={newProduct.inventorySourceProductId}
+                    onChange={handleNewProductChange}
+                  >
+                    <option value="">Usar inventario propio</option>
+
+                    {inventoryBaseProducts
+                      .filter((product) => !product.bottleVolumeMl)
+                      .map((product) => (
+                        <option
+                          key={product.productId}
+                          value={product.productId}
+                        >
+                          {product.name} — Stock: {product.stock}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label>Multiplicador de inventario</label>
+                  <input
+                    type="number"
+                    name="inventoryMultiplier"
+                    min="0.0001"
+                    step="0.0001"
+                    value={newProduct.inventoryMultiplier}
+                    onChange={handleNewProductChange}
+                    placeholder="Ej. 1, 20"
+                  />
+                </div>
+
+                <div className="checkbox-field">
+                  <label>
+                    <input
+                      type="checkbox"
+                      name="trackInventory"
+                      checked={newProduct.trackInventory}
+                      onChange={handleNewProductChange}
+                    />
+                    Controlar inventario
+                  </label>
+                </div>
+              </>
+            )}
+
+            <div>
+              <label>Imagen principal</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+              />
             </div>
 
             <div className="full-field">
@@ -554,29 +1712,26 @@ const [newProduct, setNewProduct] = useState({
                 name="description"
                 value={newProduct.description}
                 onChange={handleNewProductChange}
-                placeholder="Descripción breve del producto"
               />
             </div>
 
-            <div className="full-field">
-              <label>Imagen del producto</label>
+            {(imagePreview || newProduct.imageUrl) && (
+              <div className="full-field">
+                <label>Vista previa</label>
 
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={handleImageChange}
-              />
-
-              {imagePreview && (
                 <div className="image-preview-box">
-                  <img src={imagePreview} alt="Vista previa del producto" />
+                  <img
+                    src={imagePreview || newProduct.imageUrl}
+                    alt="Vista previa"
+                  />
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           <div className="form-actions">
             <button
+              type="button"
               className="save-product-button"
               onClick={editingProductId ? updateProduct : saveProduct}
             >
@@ -584,6 +1739,7 @@ const [newProduct, setNewProduct] = useState({
             </button>
 
             <button
+              type="button"
               className="cancel-product-button"
               onClick={() => {
                 resetProductForm();
@@ -596,19 +1752,31 @@ const [newProduct, setNewProduct] = useState({
         </div>
       )}
 
-      <div className="products-grid">
-        {products.map((product) => (
-          <ProductCard
-            key={product.productId}
-            product={product}
-            onEdit={startEditProduct}
-            onDelete={deleteProduct}
-          />
-        ))}
-      </div>
+      {products.length === 0 ? (
+        <p>No hay productos registrados.</p>
+      ) : (
+        <div className="category-sections">
+          {orderedCategoryNames.map((categoryName) => (
+            <section className="product-category-section" key={categoryName}>
+              <div className="product-category-header">
+                <h2>{categoryName}</h2>
+                <span>{groupedProducts[categoryName].length} producto(s)</span>
+              </div>
 
-      {products.length === 0 && (
-        <p>No hay productos disponibles para administrar.</p>
+              <div className="products-grid">
+                {groupedProducts[categoryName].map((product) => (
+                  <ProductCard
+                    key={product.productId}
+                    product={product}
+                    onAdd={() => {}}
+                    onEdit={startEditProduct}
+                    onDelete={deleteProduct}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       )}
     </div>
   );

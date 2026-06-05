@@ -185,8 +185,8 @@ button:disabled {
 }
 
 .pool-table-available .pool-table-header span {
-  background: #dcfce7;
-  color: #166534;
+  background: #22ff0053;
+  color: #00983a;
 }
 
 .pool-table-occupied .pool-table-header span {
@@ -1902,38 +1902,428 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+.drink-size-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.drink-size-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.drink-size-card-image {
+  width: 90px;
+  height: 90px;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.drink-size-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.drink-size-card-image span {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+/* ============================================================
+   CORRECCIONES FINALES — CONTRASTE, INPUTS, INVENTARIO Y MODALES
+   ============================================================ */
+
+/* Evita desbordamientos horizontales generales */
+html,
+body,
+#root,
+.app-layout,
+.main-content,
+.no-left-sidebar,
+.pos-page,
+.page-card,
+.pos-layout,
+.pos-main,
+.products-section,
+.cart-sidebar,
+.tables-sidebar,
+.admin-content {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Todos los inputs/selects/textarea en negro con letra blanca */
+input,
+select,
+textarea {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border: 2px solid #000000 !important;
+  caret-color: #ffffff;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #cfcfcf !important;
+  opacity: 1;
+}
+
+select option {
+  background: #000000;
+  color: #ffffff;
+}
+
+/* Inputs en estado de enfoque */
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 3px solid rgba(0, 0, 0, 0.18);
+  outline-offset: 2px;
+  border-color: #ffffff !important;
+}
+
+/* Inputs deshabilitados */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: #2d2d2d !important;
+  color: #bfbfbf !important;
+  border-color: #2d2d2d !important;
+}
+
+/* Fondos oscuros siempre con texto claro */
+.tables-sidebar,
+.cart-sidebar.dark,
+.black-panel,
+.dark-panel,
+.pos-numpad-sidebar .numpad-wide,
+.checkout-button,
+.add-product-button,
+.save-product-button,
+.table-start-button,
+.inventory-main-stock,
+.inventory-action-row button,
+.product-card button,
+.inventory-actions button,
+.report-tabs .active-report-tab,
+.admin-nav button.active,
+.admin-nav a.active {
+  color: #ffffff !important;
+}
+
+/* Fondos claros siempre con texto oscuro */
+.page-card,
+.pos-main,
+.cart-sidebar,
+.product-form,
+.product-card,
+.inventory-card,
+.inventory-category-section,
+.modal-box,
+.beer-selector-modal,
+.drink-size-card,
+.beer-select-card,
+.selector-product-card,
+.report-tabs button,
+.inventory-info-grid div,
+.inventory-add-preview,
+.inventory-alert-card {
+  color: #000000 !important;
+}
+
+/* Textos secundarios sobre fondos claros */
+.page-card p,
+.product-form p,
+.product-card p,
+.inventory-card p,
+.inventory-card span,
+.inventory-info-grid span,
+.inventory-action-title small,
+.inventory-updated-at,
+.product-category-header span {
+  color: #4b5563;
+}
+
+/* Textos dentro de panels oscuros */
+.tables-sidebar p,
+.tables-sidebar span,
+.tables-sidebar strong,
+.tables-sidebar h2,
+.inventory-main-stock span,
+.inventory-main-stock strong {
+  color: #ffffff !important;
+}
+
+/* Botones: contraste consistente */
+button {
+  border: none;
+}
+
+button:not(:disabled):hover {
+  filter: brightness(0.96);
+}
+
+.clear-cart-button,
+.cancel-product-button,
+.modal-cancel-button {
+  background: #e5e5e5 !important;
+  color: #000000 !important;
+}
+
+.checkout-button,
+.save-product-button,
+.add-product-button,
+.table-start-button,
+.inventory-action-row button {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+.modal-danger-button,
+.cart-remove-button,
+.remove-drink-size-button {
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+}
+
+/* ============================================================
+   MESAS — contador centrado, limpio y legible
+   ============================================================ */
+
+.pool-table-timer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: 0.4px;
+  color: #ffffff !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  border: none !important;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+}
+
+.pool-table-charge {
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-align: center;
+  margin-top: 6px;
+}
+
+/* ============================================================
+   CAJA / EFECTIVO / NUMPAD
+   ============================================================ */
+
+.cash-payment-box,
+.cash-sidebar-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #f8f8f8;
+  border: 1px solid #e1e1e1;
+  color: #000000;
+}
+
+.cash-payment-box label,
+.cash-sidebar-box label {
+  font-weight: 900;
+  color: #000000;
+}
+
+.cash-input,
+.cash-sidebar-input {
+  width: 100%;
+  font-size: 2rem;
+  font-weight: 900;
+  text-align: right;
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.cash-change-box,
+.cash-sidebar-change {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #000000;
+}
+
+.cash-change-negative,
+.cash-warning {
+  color: #b00020 !important;
+}
+
+.cash-warning {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.pos-numpad,
+.pos-numpad-sidebar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pos-numpad button,
+.pos-numpad-sidebar button {
+  font-size: 1.35rem;
+  font-weight: 900;
+  padding: 14px;
+  border-radius: 12px;
+  background: #e5e5e5;
+  color: #000000;
+}
+
+.pos-numpad .numpad-wide,
+.pos-numpad-sidebar .numpad-wide {
+  grid-column: span 3;
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+/* ============================================================
+   PRODUCTOS — TAMAÑOS DE BEBIDA EN FORMULARIO
+   ============================================================ */
+
+.drink-sizes-section {
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: 16px;
+  background: #f8f8f8;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: #000000;
+}
+
+.drink-sizes-header h3 {
+  margin: 0 0 6px 0;
+  color: #000000;
+  font-size: 1.25rem;
+  font-weight: 900;
+}
+
+.drink-sizes-header p {
+  margin: 0 0 14px 0;
+  font-size: 0.95rem;
+  color: #4b5563;
+}
+
+.drink-size-form,
+.drink-size-item {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+}
+
+.drink-size-form {
+  grid-template-columns: 1.2fr 0.8fr 0.8fr 1.2fr 1.1fr auto;
+}
+
+.drink-size-item {
+  grid-template-columns: 1.2fr 0.8fr 0.8fr 1.2fr 1.1fr 70px auto;
+}
+
+.add-drink-size-button,
+.remove-drink-size-button {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 900;
+}
+
+.add-drink-size-button {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+.drink-sizes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.empty-drink-sizes {
+  margin-top: 12px;
+  font-size: 0.95rem;
+  color: #4b5563;
+}
+
+.drink-size-preview {
+  margin-top: 12px;
+}
+
+.drink-size-preview img,
+.drink-size-thumbnail {
+  width: 58px;
+  height: 58px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+}
+
 /* ============================================================
    POS — MODAL DE TAMAÑOS DE BEBIDA
    ============================================================ */
 
 .beer-selector-modal {
-  width: min(980px, 94vw);
-  max-height: 92vh;
+  width: min(940px, 94vw);
+  max-height: 90vh;
   overflow-y: auto;
   padding: 30px;
-  background: #ffffff;
-  border: 3px solid #000000;
-  border-radius: 24px;
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-radius: 22px;
 }
 
 .beer-selector-header {
-  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
   margin-bottom: 22px;
 }
 
 .beer-selector-header h2 {
+  margin: 0;
   font-size: 2.25rem;
   line-height: 1.05;
   font-weight: 900;
-  color: #000000;
-  margin: 0;
+  color: #000000 !important;
 }
 
 .beer-selector-header p {
-  font-size: 1.35rem;
-  font-weight: 800;
-  color: #111111;
   margin: 8px 0 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #111111 !important;
 }
 
 .modal-close-button {
@@ -1942,13 +2332,14 @@ button:disabled {
   font-size: 2rem;
   font-weight: 900;
   border: 3px solid #000000;
-  background: #ffffff;
-  color: #000000;
+  border-radius: 12px;
+  background: #ffffff !important;
+  color: #000000 !important;
 }
 
 .drink-size-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 24px;
   margin-top: 24px;
 }
@@ -1963,10 +2354,11 @@ button:disabled {
   padding: 20px;
   border: 3px solid #000000;
   border-radius: 20px;
-  background: #ffffff;
-  color: #000000;
+  background: #ffffff !important;
+  color: #000000 !important;
   cursor: pointer;
   font-weight: 900;
+  text-align: center;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -1996,7 +2388,7 @@ button:disabled {
 .drink-size-card-image span {
   font-size: 1.15rem;
   font-weight: 900;
-  color: #333333;
+  color: #333333 !important;
   opacity: 1;
 }
 
@@ -2004,57 +2396,617 @@ button:disabled {
   font-size: 1.85rem;
   line-height: 1.05;
   font-weight: 900;
-  text-align: center;
-  color: #000000;
+  color: #000000 !important;
 }
 
 .drink-size-card span {
   font-size: 1.55rem;
   line-height: 1.1;
   font-weight: 900;
-  color: #000000;
+  color: #000000 !important;
 }
 
 .drink-size-card small {
   font-size: 1.15rem;
   line-height: 1.2;
   font-weight: 800;
-  color: #111111;
-  text-align: center;
+  color: #111111 !important;
+}
+
+/* ============================================================
+   INVENTARIO — RESTABLECER Y AGREGAR STOCK RESPONSIVO
+   ============================================================ */
+
+.inventory-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.inventory-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+}
+
+.inventory-page-header h1 {
+  margin: 0;
+  font-size: clamp(1.6rem, 2vw, 2.2rem);
+  font-weight: 900;
+  color: #000000;
+}
+
+.inventory-page-header p {
+  margin: 6px 0 0 0;
+  color: #4b5563;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.inventory-search {
+  width: min(380px, 100%);
+  padding: 13px 15px;
+  border-radius: 14px;
+  font-size: 1rem;
+  outline: none;
+}
+
+.inventory-category-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  width: 100%;
+}
+
+.inventory-category-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  background: #ffffff;
+  color: #000000;
+}
+
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 18px;
+  width: 100%;
+}
+
+.inventory-card {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px;
+  border-radius: 20px;
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07);
+  min-width: 0;
+  width: 100%;
+}
+
+.inventory-card-image {
+  width: 130px;
+  height: 130px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inventory-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.inventory-card-image span {
+  font-size: 0.85rem;
+  color: #4b5563;
+  font-weight: 800;
+}
+
+.inventory-card-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inventory-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inventory-card-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 900;
+  line-height: 1.2;
+  color: #000000;
+  word-break: break-word;
+}
+
+.inventory-card-header span {
+  font-size: 0.9rem;
+  color: #4b5563;
+  font-weight: 800;
+}
+
+.inventory-status {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.inventory-status-ok {
+  background: #dcfce7;
+  color: #166534 !important;
+}
+
+.inventory-status-low {
+  background: #fef3c7;
+  color: #92400e !important;
+}
+
+.inventory-status-out {
+  background: #fee2e2;
+  color: #991b1b !important;
+}
+
+.inventory-status-none {
+  background: #e5e7eb;
+  color: #374151 !important;
+}
+
+.inventory-main-stock {
+  padding: 14px;
+  border-radius: 16px;
+  background: #000000 !important;
+  color: #ffffff !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inventory-main-stock span,
+.inventory-main-stock strong {
+  color: #ffffff !important;
+}
+
+.inventory-main-stock span {
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.inventory-main-stock strong {
+  font-size: 1.7rem;
+  font-weight: 900;
+}
+
+.inventory-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.inventory-info-grid div {
+  padding: 10px;
+  border-radius: 13px;
+  background: #f9fafb;
+  color: #000000;
+  min-width: 0;
+}
+
+.inventory-info-grid span {
+  display: block;
+  font-size: 0.78rem;
+  color: #4b5563;
+  font-weight: 900;
+}
+
+.inventory-info-grid strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 1rem;
+  font-weight: 900;
+  color: #000000;
+  word-break: break-word;
+}
+
+.inventory-actions-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.inventory-action-box {
+  padding: 13px;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  color: #000000;
+}
+
+.reset-stock-box {
+  background: #fef2f2;
+}
+
+.add-stock-box {
+  background: #f0fdf4;
+}
+
+.inventory-action-title {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.inventory-action-title strong {
+  font-size: 1rem;
+  font-weight: 900;
+  color: #000000;
+}
+
+.inventory-action-title small {
+  color: #4b5563;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.inventory-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.inventory-action-row input {
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 13px;
+  font-size: 1rem;
+}
+
+.inventory-action-row button {
+  padding: 12px 14px;
+  border-radius: 13px;
+  background: #000000 !important;
+  color: #ffffff !important;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.inventory-add-preview {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 13px;
+  background: #ffffff;
+  color: #000000;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 900;
+}
+
+.inventory-add-preview span {
+  color: #374151;
+}
+
+.inventory-add-preview strong {
+  color: #166534;
+}
+
+.inventory-updated-at {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #4b5563;
+  font-weight: 700;
+}
+
+/* ============================================================
+   RESPONSIVE FINAL
+   ============================================================ */
+
+@media (max-width: 1200px) {
+  .pos-layout {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .cart-sidebar {
+    grid-column: 1 / -1;
+    position: static;
+    max-height: none;
+  }
+
+  .inventory-grid {
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  }
+
+  .inventory-card {
+    grid-template-columns: 115px minmax(0, 1fr);
+  }
+
+  .inventory-card-image {
+    width: 115px;
+    height: 115px;
+  }
+
+  .drink-size-form,
+  .drink-size-item {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .drink-size-thumbnail {
+    justify-self: start;
+  }
 }
 
 @media (max-width: 768px) {
+  .main-content,
+  .admin-content {
+    padding: 10px;
+  }
+
+  .page-card {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .pos-layout,
+  .pos-with-tables-layout,
+  .pos-container {
+    display: flex;
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  .tables-sidebar,
+  .cart-sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+    max-height: none;
+  }
+
+  .pos-main,
+  .products-section,
+  .cart-sidebar,
+  .cart-section {
+    width: 100%;
+    padding: 14px;
+  }
+
+  .pos-header,
+  .inventory-page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pos-search,
+  .inventory-search {
+    width: 100%;
+  }
+
+  .products-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .modal-overlay {
+    padding: 10px;
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+
+  .modal-box,
   .beer-selector-modal {
-    width: 96vw;
-    padding: 20px;
+    width: 100%;
+    max-height: none;
+    margin: 16px 0;
+    padding: 18px;
+    border-radius: 18px;
   }
 
   .beer-selector-header h2 {
-    font-size: 1.85rem;
+    font-size: 1.7rem;
   }
 
   .beer-selector-header p {
-    font-size: 1.1rem;
+    font-size: 1rem;
   }
 
-  .drink-size-grid {
+  .drink-size-grid,
+  .beer-card-grid,
+  .selector-card-grid {
     grid-template-columns: 1fr;
-    gap: 18px;
   }
 
   .drink-size-card {
-    min-height: 340px;
+    min-height: auto;
   }
 
   .drink-size-card-image {
-    height: 200px;
+    height: 220px;
+  }
+
+  .drink-size-form,
+  .drink-size-item {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-card {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+
+  .inventory-card-image {
+    width: 100%;
+    height: 190px;
+  }
+
+  .inventory-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .inventory-main-stock {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .inventory-main-stock strong {
+    font-size: 2rem;
+  }
+
+  .inventory-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-action-row {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-action-row button {
+    width: 100%;
+  }
+
+  .inventory-add-preview {
+    flex-direction: column;
+  }
+
+  .pos-numpad button,
+  .pos-numpad-sidebar button {
+    font-size: 1.55rem;
+    padding: 18px;
+  }
+
+  .cash-input,
+  .cash-sidebar-input {
+    font-size: 2.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .products-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .product-image,
+  .product-card-image {
+    height: 170px;
+  }
+
+  .drink-size-card-image {
+    height: 190px;
   }
 
   .drink-size-card strong {
-    font-size: 1.65rem;
+    font-size: 1.45rem;
   }
 
   .drink-size-card span {
-    font-size: 1.35rem;
+    font-size: 1.2rem;
+  }
+
+  .inventory-card {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .inventory-card-image {
+    height: 165px;
+  }
+
+  .inventory-page-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .inventory-main-stock strong {
+    font-size: 1.8rem;
+  }
+}
+
+/* ============================================================
+   INVENTARIO BASE PROTEGIDO
+============================================================ */
+
+.inventory-card-protected {
+  background: #f3f4f6;
+  border: 2px dashed #111827;
+  opacity: 0.92;
+}
+
+.inventory-card-badges {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.inventory-protected-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #111827;
+  color: #ffffff !important;
+  font-size: 0.78rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.inventory-protected-message {
+  padding: 14px;
+  border-radius: 16px;
+  background: #111827;
+  color: #ffffff;
+}
+
+.inventory-protected-message strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.inventory-protected-message p {
+  margin: 0;
+  color: #ffffff;
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+
+.inventory-card-protected .inventory-action-row input,
+.inventory-card-protected .inventory-action-row button {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .inventory-card-badges {
+    justify-content: flex-start;
   }
 }

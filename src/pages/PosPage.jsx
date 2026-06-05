@@ -3,18 +3,18 @@ import api from "../services/api";
 import ProductCard from "../components/ProductCard";
 import TablesSidebar from "../components/TablesSidebar";
 
+const DRINK_SIZE_PRODUCT_TYPES = ["PREPARED_DRINK", "LIQUOR_DRINK", "SHOT"];
+
 function PosPage() {
   const [products, setProducts] = useState([]);
   const [beers, setBeers] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
-
   const [cart, setCart] = useState([]);
 
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(false);
-
   const [cashReceived, setCashReceived] = useState("");
 
   const [beerModal, setBeerModal] = useState({
@@ -52,7 +52,6 @@ function PosPage() {
   );
 
   const selectedPaymentName = selectedPaymentMethod?.name?.toLowerCase() || "";
-
   const isCashPayment = selectedPaymentName.includes("efectivo");
 
   const isCardOrTransferPayment =
@@ -61,6 +60,18 @@ function PosPage() {
 
   const cashReceivedNumber = Number(cashReceived || 0);
   const cashChange = cashReceivedNumber - cartTotal;
+
+  const isDrinkSizeProduct = (product) => {
+    return DRINK_SIZE_PRODUCT_TYPES.includes(product?.productType);
+  };
+
+  const isPreparedBeerDrink = (product) => {
+    return product?.productType === "PREPARED_DRINK";
+  };
+
+  const isLiquorDrinkSizeProduct = (product) => {
+    return product?.productType === "LIQUOR_DRINK" || product?.productType === "SHOT";
+  };
 
   const loadInitialData = async () => {
     await Promise.all([
@@ -98,51 +109,26 @@ function PosPage() {
     });
   };
 
-  const getImageUrl = (imageUrl) => {
-    if (!imageUrl) return "";
-
-    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-      return imageUrl;
-    }
-
-    const baseUrl = api.defaults.baseURL.replace("/api", "");
-
-    return `${baseUrl}${imageUrl}`;
-  };
-
-  const isDrinkSizeProduct = (product) => {
-    return (
-      product.productType === "PREPARED_DRINK" ||
-      product.productType === "LIQUOR_DRINK" ||
-      product.productType === "SHOT"
-    );
-  };
-
   const normalizeCartItem = (item) => {
     const activeCartItemId = item.activeCartItemId ?? item.ActiveCartItemId;
 
     return {
       activeCartItemId,
       cartItemId: String(activeCartItemId),
-
       productId: item.productId ?? item.ProductId ?? null,
-
       productDrinkSizeId:
         item.productDrinkSizeId ?? item.ProductDrinkSizeId ?? null,
       drinkSizeName: item.drinkSizeName ?? item.DrinkSizeName ?? null,
       ouncesUsed: item.ouncesUsed ?? item.OuncesUsed ?? null,
-
       name: item.name ?? item.Name ?? "Producto",
       quantity: item.quantity ?? item.Quantity ?? 1,
       unitPrice: item.unitPrice ?? item.UnitPrice ?? 0,
       subtotal: item.subtotal ?? item.Subtotal ?? 0,
       productType: item.productType ?? item.ProductType ?? "INDIVIDUAL",
-
       selectedBeerProductId:
         item.selectedBeerProductId ?? item.SelectedBeerProductId ?? null,
       selectedBottleProductId:
         item.selectedBottleProductId ?? item.SelectedBottleProductId ?? null,
-
       totalMinutes: item.totalMinutes ?? item.TotalMinutes ?? null,
     };
   };
@@ -150,9 +136,7 @@ function PosPage() {
   const loadCart = async () => {
     try {
       const response = await api.get("/ActiveCart");
-
       const items = response.data.items ?? response.data.Items ?? [];
-
       const normalizedCart = items.map(normalizeCartItem);
 
       setCart(normalizedCart);
@@ -186,7 +170,7 @@ function PosPage() {
         isBeer: product.isBeer ?? product.IsBeer ?? false,
         inventoryStatus:
           product.inventoryStatus ?? product.InventoryStatus ?? "NO_TRACK",
-        imageUrl: getImageUrl(product.imageUrl ?? product.ImageUrl ?? ""),
+        imageUrl: product.imageUrl ?? product.ImageUrl ?? "",
         productType:
           product.productType ?? product.ProductType ?? "BOTTLED_DRINK",
         inventorySourceProductId:
@@ -222,7 +206,7 @@ function PosPage() {
         minStock: beer.minStock ?? beer.MinStock ?? 0,
         trackInventory: beer.trackInventory ?? beer.TrackInventory ?? true,
         isBeer: beer.isBeer ?? beer.IsBeer ?? true,
-        imageUrl: getImageUrl(beer.imageUrl ?? beer.ImageUrl ?? ""),
+        imageUrl: beer.imageUrl ?? beer.ImageUrl ?? "",
         productType: beer.productType ?? beer.ProductType ?? "BOTTLED_DRINK",
       }));
 
@@ -269,6 +253,14 @@ function PosPage() {
     });
   };
 
+  const closeDrinkSizeModal = () => {
+    setDrinkSizeModal({
+      isOpen: false,
+      product: null,
+      sizes: [],
+    });
+  };
+
   const openDrinkSizeModal = async (product) => {
     try {
       const response = await api.get(`/Products/${product.productId}/DrinkSizes`);
@@ -276,19 +268,15 @@ function PosPage() {
       const sizes = response.data.map((size) => ({
         productDrinkSizeId:
           size.productDrinkSizeId ?? size.ProductDrinkSizeId,
-        productId: size.productId ?? size.ProductId,
+        productId: size.productId ?? size.ProductId ?? product.productId,
         sizeName: size.sizeName ?? size.SizeName,
         ouncesUsed: size.ouncesUsed ?? size.OuncesUsed,
         price: size.price ?? size.Price,
-        imageUrl: getImageUrl(size.imageUrl ?? size.ImageUrl ?? ""),
+        imageUrl: size.imageUrl ?? size.ImageUrl ?? "",
         inventorySourceProductId:
           size.inventorySourceProductId ??
           size.InventorySourceProductId ??
           null,
-        inventorySourceProductName:
-          size.inventorySourceProductName ??
-          size.InventorySourceProductName ??
-          "",
       }));
 
       if (sizes.length === 0) {
@@ -302,17 +290,9 @@ function PosPage() {
         sizes,
       });
     } catch (error) {
-      console.error("Error al cargar tamaños:", error);
-      showToast("No se pudieron cargar los tamaños.", "error");
+      console.error("Error al cargar tamaños de bebida:", error);
+      showToast("No se pudieron cargar los tamaños de la bebida.", "error");
     }
-  };
-
-  const closeDrinkSizeModal = () => {
-    setDrinkSizeModal({
-      isOpen: false,
-      product: null,
-      sizes: [],
-    });
   };
 
   const getRequiredBeerQuantity = (product) => {
@@ -322,7 +302,43 @@ function PosPage() {
       return Number(product.inventoryMultiplier || 10);
     }
 
+    if (product.productType === "PREPARED_DRINK") {
+      return 1;
+    }
+
     return Number(product.inventoryMultiplier || 1);
+  };
+
+
+  const getAllowedBeerUnitPriceForBucket = (product) => {
+    if (!product || product.productType !== "BEER_BUCKET") {
+      return null;
+    }
+
+    const requiredQuantity = getRequiredBeerQuantity(product);
+    const bucketPrice = Number(product.price || 0);
+
+    if (requiredQuantity <= 0 || bucketPrice <= 0) {
+      return null;
+    }
+
+    return bucketPrice / requiredQuantity;
+  };
+
+  const getFilteredBeersForProduct = (product) => {
+    if (!product || product.productType !== "BEER_BUCKET") {
+      return beers;
+    }
+
+    const allowedUnitPrice = getAllowedBeerUnitPriceForBucket(product);
+
+    if (!allowedUnitPrice) {
+      return beers;
+    }
+
+    return beers.filter((beer) => {
+      return Number(beer.price || 0) === Number(allowedUnitPrice);
+    });
   };
 
   const addPreparedDrinkToCart = async (selectedBeer) => {
@@ -349,9 +365,14 @@ function PosPage() {
     }
 
     try {
+      const hasSelectedSize = Boolean(product.selectedDrinkSizeId);
+      const itemName = hasSelectedSize
+        ? `${product.name} - ${product.selectedDrinkSizeName} - ${selectedBeer.name}`
+        : `${product.name} - ${selectedBeer.name}`;
+
       const item = {
         productId: product.productId,
-        name: `${product.name} - ${selectedBeer.name}`,
+        name: itemName,
         quantity: 1,
         unitPrice: Number(product.price || 0),
         subtotal: Number(product.price || 0),
@@ -360,8 +381,8 @@ function PosPage() {
         selectedBeerProductId: selectedBeer.productId,
         selectedBottleProductId: null,
 
-        productDrinkSizeId: null,
-        drinkSizeName: null,
+        productDrinkSizeId: product.selectedDrinkSizeId || null,
+        drinkSizeName: product.selectedDrinkSizeName || null,
         ouncesUsed: null,
 
         totalMinutes: null,
@@ -386,26 +407,26 @@ function PosPage() {
       return;
     }
 
-    if (!selectedSize.inventorySourceProductId) {
-      showToast(
-        "Este tamaño no tiene botella configurada. Corrige el producto en administración.",
-        "warning"
-      );
-      return;
-    }
-
     const productWithSize = {
       ...product,
-      selectedDrinkSizeId: selectedSize.productDrinkSizeId,
-      selectedDrinkSizeName: selectedSize.sizeName,
-      ouncesUsed: Number(selectedSize.ouncesUsed || 0),
-      price: Number(selectedSize.price || 0),
-      drinkSizeImageUrl: selectedSize.imageUrl || "",
-      inventorySourceProductId: selectedSize.inventorySourceProductId,
-      inventorySourceProductName: selectedSize.inventorySourceProductName || "",
+      selectedDrinkSizeId:
+        selectedSize.productDrinkSizeId ?? selectedSize.ProductDrinkSizeId,
+      selectedDrinkSizeName: selectedSize.sizeName ?? selectedSize.SizeName,
+      ouncesUsed: Number(selectedSize.ouncesUsed ?? selectedSize.OuncesUsed ?? 0),
+      price: Number(selectedSize.price ?? selectedSize.Price ?? 0),
+      drinkSizeImageUrl: selectedSize.imageUrl ?? selectedSize.ImageUrl ?? "",
+      inventorySourceProductId:
+        selectedSize.inventorySourceProductId ??
+        selectedSize.InventorySourceProductId ??
+        null,
     };
 
     closeDrinkSizeModal();
+
+    if (isPreparedBeerDrink(productWithSize)) {
+      openBeerModal(productWithSize);
+      return;
+    }
 
     await addDrinkWithSizeToCart(productWithSize);
   };
@@ -416,18 +437,29 @@ function PosPage() {
       return;
     }
 
-    if (!product.inventorySourceProductId) {
-      showToast(
-        "Este tamaño no tiene botella configurada. Revisa el producto.",
-        "warning"
-      );
+    if (Number(product.price || 0) <= 0) {
+      showToast("El tamaño seleccionado no tiene precio válido.", "warning");
       return;
+    }
+
+    if (isLiquorDrinkSizeProduct(product)) {
+      if (Number(product.ouncesUsed || 0) <= 0) {
+        showToast("El tamaño seleccionado no tiene onzas válidas.", "warning");
+        return;
+      }
+
+      if (!product.inventorySourceProductId) {
+        showToast(
+          "Este tamaño no tiene botella configurada. Revisa el producto en administración.",
+          "warning"
+        );
+        return;
+      }
     }
 
     try {
       const item = {
         productId: product.productId,
-
         productDrinkSizeId: product.selectedDrinkSizeId,
         drinkSizeName: product.selectedDrinkSizeName,
         ouncesUsed: Number(product.ouncesUsed || 0),
@@ -441,10 +473,12 @@ function PosPage() {
         selectedBeerProductId: null,
 
         /*
-          La botella ya viene configurada desde el tamaño.
-          En POS ya no se selecciona manualmente.
+          La botella ya viene configurada desde el tamaño del producto.
+          No se selecciona en POS. Se envía para compatibilidad con el backend actual.
         */
-        selectedBottleProductId: product.inventorySourceProductId,
+        selectedBottleProductId: isLiquorDrinkSizeProduct(product)
+          ? product.inventorySourceProductId
+          : null,
 
         totalMinutes: null,
       };
@@ -461,11 +495,11 @@ function PosPage() {
 
   const addToCart = async (product) => {
     if (isDrinkSizeProduct(product)) {
-      openDrinkSizeModal(product);
+      await openDrinkSizeModal(product);
       return;
     }
 
-    if (product.requiresBeerSelection || product.productType === "BEER_BUCKET") {
+    if (product.productType === "BEER_BUCKET" || product.requiresBeerSelection) {
       openBeerModal(product);
       return;
     }
@@ -483,14 +517,11 @@ function PosPage() {
         unitPrice: Number(product.price || 0),
         subtotal: Number(product.price || 0),
         productType: product.productType,
-
         selectedBeerProductId: null,
         selectedBottleProductId: null,
-
         productDrinkSizeId: null,
         drinkSizeName: null,
         ouncesUsed: null,
-
         totalMinutes: null,
       };
 
@@ -600,14 +631,11 @@ function PosPage() {
         unitPrice,
         subtotal: unitPrice,
         productType: "SERVICE",
-
         selectedBeerProductId: null,
         selectedBottleProductId: null,
-
         productDrinkSizeId: null,
         drinkSizeName: null,
         ouncesUsed: null,
-
         totalMinutes:
           tableCharge.totalMinutes ?? tableCharge.TotalMinutes ?? null,
       };
@@ -664,10 +692,8 @@ function PosPage() {
           productId: item.productId,
           quantity: item.quantity,
           customUnitPrice: item.unitPrice,
-
           selectedBeerProductId: item.selectedBeerProductId || null,
           selectedBottleProductId: item.selectedBottleProductId || null,
-
           productDrinkSizeId: item.productDrinkSizeId || null,
           drinkSizeName: item.drinkSizeName || null,
           ouncesUsed: item.ouncesUsed || null,
@@ -817,7 +843,13 @@ function PosPage() {
 
                   <p>
                     {beerModal.product?.productType === "BEER_BUCKET"
-                      ? "La cubeta descontará 10 unidades de la cerveza seleccionada."
+                      ? `La cubeta descontará ${getRequiredBeerQuantity(
+                          beerModal.product
+                        )} cervezas. Solo muestra cervezas de ${formatCurrency(
+                          getAllowedBeerUnitPriceForBucket(beerModal.product)
+                        )}.`
+                      : beerModal.product?.selectedDrinkSizeName
+                      ? `Tamaño: ${beerModal.product.selectedDrinkSizeName}. Selecciona la cerveza; se descontará 1 unidad.`
                       : "La bebida descontará 1 unidad de la cerveza seleccionada."}
                   </p>
                 </div>
@@ -831,11 +863,11 @@ function PosPage() {
                 </button>
               </div>
 
-              {beers.length === 0 ? (
-                <p>No hay cervezas disponibles.</p>
+              {getFilteredBeersForProduct(beerModal.product).length === 0 ? (
+                <p>No hay cervezas disponibles para este producto.</p>
               ) : (
                 <div className="beer-card-grid">
-                  {beers.map((beer) => {
+                  {getFilteredBeersForProduct(beerModal.product).map((beer) => {
                     const requiredQuantity = getRequiredBeerQuantity(
                       beerModal.product
                     );
@@ -867,6 +899,7 @@ function PosPage() {
 
                         <div className="beer-select-info">
                           <strong>{beer.name}</strong>
+                          <span>Precio: {formatCurrency(beer.price)}</span>
                           <span>Stock: {Number(beer.stock || 0)}</span>
                           <span>Disponible para: {availableSales} venta(s)</span>
 
@@ -917,10 +950,11 @@ function PosPage() {
 
                     <strong>{size.sizeName}</strong>
                     <span>{formatCurrency(size.price)}</span>
-                    <small>{Number(size.ouncesUsed || 0)} oz</small>
-
-                    {size.inventorySourceProductName && (
-                      <small>Botella: {size.inventorySourceProductName}</small>
+                    {!isPreparedBeerDrink(drinkSizeModal.product) && (
+                      <small>{Number(size.ouncesUsed || 0)} oz</small>
+                    )}
+                    {isPreparedBeerDrink(drinkSizeModal.product) && (
+                      <small>Descuenta 1 cerveza</small>
                     )}
                   </button>
                 ))}
@@ -1008,9 +1042,7 @@ function PosPage() {
                   {item.drinkSizeName && (
                     <div className="cart-item-meta">
                       <span>Tamaño: {item.drinkSizeName}</span>
-                      {item.ouncesUsed && (
-                        <span>{Number(item.ouncesUsed)} oz</span>
-                      )}
+                      {item.ouncesUsed && <span>{item.ouncesUsed} oz</span>}
                     </div>
                   )}
 
