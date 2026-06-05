@@ -817,15 +817,7 @@ function PosPage() {
 
   return (
     <div className="pos-page">
-      <header className="pos-logo-bar">
-        <img
-          className="pos-logo-image"
-          src="/nuevo-ejido-logo.jpg"
-          alt="Club Deportivo Billar El Nuevo Ejido"
-        />
-      </header>
-
-      <div className="pos-layout">
+        <div className="pos-layout">
         {toast && (
           <div className={`toast toast-${toast.type}`}>{toast.message}</div>
         )}
@@ -1107,13 +1099,15 @@ function PosPage() {
               <label>Efectivo recibido</label>
 
               <input
-                type="text"
-                inputMode="none"
+                type="number"
+                inputMode="decimal"
                 className="cash-sidebar-input"
                 value={cashReceived}
-                readOnly
+                onChange={(e) => setCashReceived(e.target.value)}
                 placeholder="0.00"
-              />
+                min="0"
+                step="0.01"
+/>
 
               <div className="cash-sidebar-change">
                 <span>Cambio</span>

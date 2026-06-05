@@ -3010,3 +3010,461 @@ button:not(:disabled):hover {
     justify-content: flex-start;
   }
 }
+/* ============================================================
+   POS - SIDEBARS ALTURA COMPLETA Y RESPONSIVO
+============================================================ */
+
+.pos-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.pos-logo-bar {
+  flex: 0 0 auto;
+}
+
+.pos-layout {
+  flex: 1;
+  min-height: calc(100vh - 110px);
+  align-items: stretch;
+}
+
+.tables-sidebar,
+.cart-sidebar,
+.pos-main {
+  height: 100%;
+}
+
+.tables-sidebar,
+.cart-sidebar {
+  min-height: calc(100vh - 146px);
+  display: flex;
+  flex-direction: column;
+}
+
+.tables-sidebar .tables-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.cart-sidebar {
+  position: sticky;
+  top: 18px;
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+}
+
+.cart-sidebar .cart-items {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Evita que el contenido se corte cuando hay muchos productos */
+.pos-main {
+  min-height: calc(100vh - 146px);
+}
+
+/* Scroll visual más limpio */
+.tables-sidebar .tables-list::-webkit-scrollbar,
+.cart-sidebar::-webkit-scrollbar,
+.cart-sidebar .cart-items::-webkit-scrollbar {
+  width: 7px;
+}
+
+.tables-sidebar .tables-list::-webkit-scrollbar-thumb,
+.cart-sidebar::-webkit-scrollbar-thumb,
+.cart-sidebar .cart-items::-webkit-scrollbar-thumb {
+  background: #111827;
+  border-radius: 999px;
+}
+
+.tables-sidebar .tables-list::-webkit-scrollbar-track,
+.cart-sidebar::-webkit-scrollbar-track,
+.cart-sidebar .cart-items::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 999px;
+}
+
+/* Tablet */
+@media (max-width: 1200px) {
+  .pos-layout {
+    min-height: auto;
+    align-items: start;
+  }
+
+  .tables-sidebar,
+  .cart-sidebar,
+  .pos-main {
+    height: auto;
+    min-height: auto;
+  }
+
+  .tables-sidebar .tables-list,
+  .cart-sidebar .cart-items {
+    overflow-y: visible;
+  }
+
+  .cart-sidebar {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+/* Celular */
+@media (max-width: 768px) {
+  .pos-page {
+    min-height: 100vh;
+  }
+
+  .pos-layout {
+    min-height: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tables-sidebar,
+  .cart-sidebar,
+  .pos-main {
+    width: 100%;
+    min-height: auto;
+    height: auto;
+  }
+
+  .cart-sidebar {
+    position: static;
+    max-height: none;
+  }
+
+  .tables-sidebar .tables-list,
+  .cart-sidebar .cart-items {
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+/* ============================================================
+   POS SIN HEADER - ALTURA COMPLETA
+============================================================ */
+
+.pos-page {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pos-logo-bar {
+  display: none !important;
+}
+
+.pos-layout {
+  flex: 1;
+  min-height: 100vh;
+  height: auto;
+  padding: 14px;
+  align-items: stretch;
+}
+
+.tables-sidebar,
+.cart-sidebar,
+.pos-main {
+  min-height: calc(100vh - 28px);
+}
+
+.tables-sidebar,
+.cart-sidebar {
+  display: flex;
+  flex-direction: column;
+}
+
+.tables-sidebar .tables-list,
+.cart-sidebar .cart-items {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.cart-sidebar {
+  position: sticky;
+  top: 14px;
+  max-height: calc(100vh - 28px);
+  overflow-y: auto;
+}
+
+@media (max-width: 1200px) {
+  .pos-layout {
+    min-height: auto;
+  }
+
+  .tables-sidebar,
+  .cart-sidebar,
+  .pos-main {
+    min-height: auto;
+  }
+
+  .cart-sidebar {
+    position: static;
+    max-height: none;
+  }
+
+  .tables-sidebar .tables-list,
+  .cart-sidebar .cart-items {
+    overflow-y: visible;
+  }
+}
+
+@media (max-width: 768px) {
+  .pos-layout {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+  }
+
+  .tables-sidebar,
+  .cart-sidebar,
+  .pos-main {
+    width: 100%;
+    min-height: auto;
+  }
+}
+/* ============================================================
+   POS - CARRITO PRODUCTOS ARRIBA Y COBRO ABAJO
+============================================================ */
+
+.cart-sidebar {
+  position: static !important;
+  top: auto !important;
+  max-height: none !important;
+  overflow: hidden !important;
+
+  background: #ffffff;
+  display: flex !important;
+  flex-direction: column !important;
+
+  justify-self: stretch !important;
+  align-self: stretch !important;
+  margin-top: 0 !important;
+}
+
+/* Título arriba */
+.cart-sidebar > h2 {
+  order: 1;
+  margin-top: 0 !important;
+  margin-bottom: 12px !important;
+  flex-shrink: 0;
+}
+
+/* Productos arriba, creciendo hacia abajo */
+.cart-items {
+  order: 2;
+  flex: 1 1 auto !important;
+  min-height: 220px;
+  max-height: none !important;
+
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  padding-right: 6px;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+/* Texto cuando no hay productos */
+.empty-cart-text {
+  order: 2;
+  flex: 1 1 auto;
+  min-height: 120px;
+  margin: 0 0 14px 0;
+  padding-bottom: 14px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+/* Controles de cobro abajo */
+.cart-total {
+  order: 3;
+  flex-shrink: 0;
+  margin-top: 0 !important;
+}
+
+.payment-box {
+  order: 4;
+  flex-shrink: 0;
+}
+
+.cash-sidebar-box {
+  order: 5;
+  flex-shrink: 0;
+}
+
+.checkout-button {
+  order: 6;
+  flex-shrink: 0;
+}
+
+.pos-numpad-sidebar {
+  order: 7;
+  flex-shrink: 0;
+}
+
+.clear-cart-button {
+  order: 8;
+  flex-shrink: 0;
+}
+
+/* Scroll visual del carrito */
+.cart-items::-webkit-scrollbar {
+  width: 7px;
+}
+
+.cart-items::-webkit-scrollbar-thumb {
+  background: #111827;
+  border-radius: 999px;
+}
+
+.cart-items::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 999px;
+}
+
+/* ============================================================
+   RESPONSIVE CARRITO
+============================================================ */
+
+@media (max-width: 1024px) {
+  .cart-sidebar {
+    overflow: visible !important;
+  }
+
+  .cart-items {
+    flex: none !important;
+    max-height: 360px !important;
+    min-height: auto;
+    overflow-y: auto !important;
+  }
+
+  .empty-cart-text {
+    flex: none;
+    min-height: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .cart-items {
+    max-height: 320px !important;
+    overflow-y: auto !important;
+  }
+}
+
+/* ============================================================
+   POS - ELIMINAR GAP ENTRE PRODUCTOS DEL CARRITO Y COBRO
+============================================================ */
+
+.cart-sidebar {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+}
+
+/* La lista del carrito ya no debe ocupar todo el espacio libre */
+.cart-items {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  max-height: 420px !important;
+  overflow-y: auto !important;
+
+  margin-bottom: 10px !important;
+  padding-bottom: 10px !important;
+}
+
+/* Cuando haya muchos productos, solo la lista tiene scroll */
+.cart-total {
+  margin-top: 0 !important;
+  padding-top: 10px !important;
+}
+
+/* Evita que el texto de carrito vacío genere espacio grande */
+.empty-cart-text {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  margin-bottom: 10px !important;
+  padding-bottom: 10px !important;
+}
+
+/* Mantiene los controles juntos */
+.payment-box,
+.cash-sidebar-box,
+.checkout-button,
+.pos-numpad-sidebar,
+.clear-cart-button {
+  flex-shrink: 0 !important;
+}
+
+/* ============================================================
+   CORRECCIÓN FINAL — POOL SIDEBAR A LA ALTURA DE PRODUCTOS
+   ============================================================ */
+
+/*
+   Esta sección debe permanecer al final del archivo.
+   Corrige que el sidebar de mesas se quede cortado por height/max-height/sticky.
+   En escritorio, el sidebar se estira junto con la columna de productos.
+*/
+
+.pos-layout {
+  align-items: stretch !important;
+}
+
+/* La columna de mesas ya no debe limitarse al alto de la ventana */
+.tables-sidebar {
+  position: static !important;
+  top: auto !important;
+  align-self: stretch !important;
+  height: auto !important;
+  min-height: 100% !important;
+  max-height: none !important;
+  overflow: visible !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  background: #1f1f1f !important;
+}
+
+/* El listado ocupa el espacio natural de la columna y no recorta la altura */
+.tables-sidebar .tables-list {
+  flex: 0 0 auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* Asegura que productos, mesas y carrito compartan la misma fila del grid */
+.pos-main,
+.cart-sidebar,
+.tables-sidebar {
+  align-self: stretch !important;
+}
+
+/*
+   En pantallas pequeñas se conserva el comportamiento apilado,
+   para evitar columnas demasiado largas o scroll incómodo.
+*/
+@media (max-width: 1180px) {
+  .tables-sidebar {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .tables-sidebar .tables-list {
+    overflow: visible !important;
+  }
+}
