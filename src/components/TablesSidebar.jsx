@@ -1,390 +1,476 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../services/api";
 
-const getDefaultTableType = (tableNumber) => {
-  if (tableNumber >= 5 && tableNumber <= 7) {
-    return "carambola";
-  }
-
-  return "pool";
-};
-
-const parseBackendDate = (dateValue) => {
-  if (!dateValue) return null;
-
-  if (dateValue instanceof Date) {
-    return dateValue.getTime();
-  }
-
-  const dateText = String(dateValue);
-
-  const dotNetMatch = dateText.match(/\/Date\((\d+)\)\//);
-  if (dotNetMatch) {
-    return Number(dotNetMatch[1]);
-  }
-
-  const localDateMatch = dateText.match(
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/
-  );
-
-  if (localDateMatch) {
-    const [, year, month, day, hour, minute, second, milliseconds = "0"] =
-      localDateMatch;
-
-    return new Date(
-      Number(year),
-      Number(month) - 1,
-      Number(day),
-      Number(hour),
-      Number(minute),
-      Number(second),
-      Number(milliseconds.padEnd(3, "0").slice(0, 3))
-    ).getTime();
-  }
-
-  const parsedTime = new Date(dateText).getTime();
-
-  if (!Number.isNaN(parsedTime)) {
-    return parsedTime;
-  }
-
-  return null;
-};
-
-function TablesSidebar({ onAddTableCharge, tableRentalProduct, onNotify }) {
+function TablesSidebar({
+  onAddTableCharge,
+  tableRentalProduct,
+  onNotify,
+  onOpenTableNote,
+  activeTableNoteId,
+  tableNotes = [],
+}) {
   const [tables, setTables] = useState([]);
-  const [currentTime, setCurrentTime] = useState(Date.now());
-  const [loadingTableId, setLoadingTableId] = useState(null);
+  const [loadingTables, setLoadingTables] = useState(false);
+
+  const notify = (message, type = "success") => {
+    if (typeof onNotify === "function") {
+      onNotify(message, type);
+    }
+  };
 
   useEffect(() => {
     loadTables();
 
-    const polling = setInterval(() => {
-      loadTables();
-    }, 3000);
-
-    return () => clearInterval(polling);
-  }, []);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(Date.now());
+    const interval = setInterval(() => {
+      loadTables(false);
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => clearInterval(interval);
   }, []);
 
-  const notify = (message, type = "warning") => {
-    if (onNotify) {
-      onNotify(message, type);
-      return;
-    }
-
-    console.warn(message);
-  };
-
   const normalizeTable = (table) => {
-    const tableId =
-      table.poolTableId ??
-      table.PoolTableId ??
-      table.id ??
-      table.Id;
+    const poolTableId =
+      table.poolTableId ?? table.PoolTableId ?? table.tableId ?? table.TableId;
 
-    const tableNumber =
-      table.tableNumber ??
-      table.TableNumber ??
-      table.number ??
-      table.Number ??
-      tableId;
+    const tableNumber = table.tableNumber ?? table.TableNumber ?? "";
+    const tableType = table.tableType ?? table.TableType ?? "";
+    const status = table.status ?? table.Status ?? "AVAILABLE";
 
-    const rawStatus = table.status ?? table.Status ?? "Disponible";
-    const normalizedStatus = String(rawStatus).toLowerCase().trim();
-    const elapsedSecondsFromServer =
-      table.elapsedSeconds ??
-      table.ElapsedSeconds ??
-      0;
-
-    const rawStartedAt =
+    const startedAt =
       table.startedAt ??
       table.StartedAt ??
-      table.started_at ??
-      table.STARTEDAT ??
+      table.startTime ??
+      table.StartTime ??
       null;
 
-    const startedAtMs = parseBackendDate(rawStartedAt);
-
-    const isOccupied =
-      normalizedStatus === "ocupada" ||
-      normalizedStatus === "ocupado" ||
-      normalizedStatus === "occupied" ||
-      normalizedStatus === "busy" ||
-      Boolean(startedAtMs);
-
-    const rawTableType =
-      table.tableType ??
-      table.TableType ??
-      getDefaultTableType(Number(tableNumber));
+    const elapsedSeconds =
+      table.elapsedSeconds ?? table.ElapsedSeconds ?? null;
 
     return {
-  poolTableId: Number(tableId),
-  tableNumber: Number(tableNumber),
-  name: table.name ?? table.Name ?? `Mesa ${tableNumber}`,
-  tableType: String(rawTableType).toLowerCase(),
-  status: isOccupied ? "occupied" : "available",
-  rawStatus,
-  startedAt: rawStartedAt,
-  startedAtMs,
-  elapsedSecondsFromServer: Number(elapsedSecondsFromServer || 0),
-  loadedAtMs: Date.now(),
-  stoppedAt: table.stoppedAt ?? table.StoppedAt ?? null,
-  currentCharge: table.currentCharge ?? table.CurrentCharge ?? 0,
-};
+      poolTableId,
+      tableNumber,
+      tableType,
+      status,
+      startedAt,
+      elapsedSeconds,
+      isActive:
+        status === "ACTIVE" ||
+        status === "OCCUPIED" ||
+        status === "BUSY" ||
+        Boolean(startedAt),
+    };
   };
 
-  const loadTables = async () => {
+  const loadTables = async (showLoading = true) => {
     try {
+      if (showLoading) {
+        setLoadingTables(true);
+      }
+
       const response = await api.get("/PoolTables");
 
-      const normalizedTables = response.data
+      const normalizedTables = (response.data || [])
         .map(normalizeTable)
-        .sort((a, b) => a.tableNumber - b.tableNumber);
+        .sort(
+          (a, b) => Number(a.tableNumber || 0) - Number(b.tableNumber || 0)
+        );
 
       setTables(normalizedTables);
     } catch (error) {
       console.error("Error al cargar mesas:", error);
       notify("No se pudieron cargar las mesas de billar.", "error");
+    } finally {
+      if (showLoading) {
+        setLoadingTables(false);
+      }
     }
   };
 
- const getElapsedSeconds = (table) => {
-  if (!table || table.status !== "occupied") return 0;
+  const calculateElapsedSeconds = (table) => {
+    if (!table) return 0;
 
-  if (Number(table.elapsedSecondsFromServer) > 0) {
-    const secondsSinceLoad = Math.floor(
-      (currentTime - table.loadedAtMs) / 1000
-    );
+    if (table.elapsedSeconds !== null && table.elapsedSeconds !== undefined) {
+      return Number(table.elapsedSeconds || 0);
+    }
 
-    return table.elapsedSecondsFromServer + Math.max(0, secondsSinceLoad);
-  }
+    if (!table.startedAt) return 0;
 
-  if (!table.startedAtMs) return 0;
+    const startedDate = new Date(table.startedAt);
+    const now = new Date();
 
-  const diff = Math.floor((currentTime - table.startedAtMs) / 1000);
+    if (Number.isNaN(startedDate.getTime())) {
+      return 0;
+    }
 
-  return diff > 0 ? diff : 0;
-};
+    return Math.max(0, Math.floor((now - startedDate) / 1000));
+  };
 
-  const formatTime = (totalSeconds) => {
+  const calculateTableLiveChargeBySeconds = (elapsedSeconds) => {
+    const seconds = Math.max(0, Number(elapsedSeconds || 0));
+    const totalMinutes = Math.max(1, Math.ceil(seconds / 60));
+    const rawTotal = totalMinutes * 0.85;
+
+    return {
+      totalMinutes,
+      total: rawTotal,
+    };
+  };
+
+  const calculateTableFinalChargeBySeconds = (elapsedSeconds) => {
+    const liveCharge = calculateTableLiveChargeBySeconds(elapsedSeconds);
+    const roundedTotal = Math.ceil(liveCharge.total / 10) * 10;
+
+    return {
+      totalMinutes: liveCharge.totalMinutes,
+      total: roundedTotal,
+    };
+  };
+
+  const formatElapsedTime = (secondsValue) => {
+    const totalSeconds = Math.max(0, Number(secondsValue || 0));
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
 
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
-      2,
-      "0"
-    )}:${String(seconds).padStart(2, "0")}`;
+    const pad = (value) => String(value).padStart(2, "0");
+
+    if (hours > 0) {
+      return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    }
+
+    return `${pad(minutes)}:${pad(seconds)}`;
   };
 
-  const calculateTableCharge = (table) => {
-    const elapsedSeconds = getElapsedSeconds(table);
-    const elapsedMinutes = Math.ceil(elapsedSeconds / 60);
-
-    if (elapsedMinutes <= 0) return 0;
-
-    if (elapsedMinutes <= 60) return 50;
-
-    const extraMinutes = elapsedMinutes - 60;
-    const extraHalfHours = Math.ceil(extraMinutes / 30);
-
-    return 50 + extraHalfHours * 25;
+  const formatCurrency = (value) => {
+    return Number(value || 0).toLocaleString("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    });
   };
 
-  const startTable = async (tableId) => {
+  const getTableName = (table) => {
+    if (!table) return "Mesa";
+
+    return `Mesa ${table.tableNumber || table.poolTableId || ""}`;
+  };
+
+  const getTableNote = (table) => {
+    if (!table) return null;
+
+    return (
+      tableNotes.find(
+        (note) => Number(note.tableId) === Number(table.poolTableId)
+      ) || null
+    );
+  };
+
+  const getTableNoteItemCount = (tableNote) => {
+    if (!tableNote) return 0;
+
+    const items = tableNote.items ?? tableNote.Items ?? [];
+
+    return items.length;
+  };
+
+  const isTableNoteActive = (table) => {
+    if (!table) return false;
+
+    return Number(activeTableNoteId) === Number(table.poolTableId);
+  };
+
+  const handleOpenTableNote = async (table) => {
+    if (typeof onOpenTableNote !== "function") {
+      notify("La función de nota de mesa no está conectada.", "warning");
+      return;
+    }
+
+    await onOpenTableNote(table);
+  };
+
+  const startTable = async (table) => {
     try {
-      setLoadingTableId(tableId);
-
-      await api.post(`/PoolTables/${tableId}/Start`);
-      await loadTables();
-
-      notify("Mesa iniciada correctamente.", "success");
+      await api.post(`/PoolTables/${table.poolTableId}/Start`);
+      await loadTables(false);
+      notify(`${getTableName(table)} iniciada.`, "success");
     } catch (error) {
       console.error("Error al iniciar mesa:", error);
+      notify("No se pudo iniciar la mesa.", "error");
+    }
+  };
 
-      const message =
-        error.response?.data?.message ||
-        error.response?.data?.Message ||
-        error.response?.data ||
-        "No se pudo iniciar la mesa.";
-
-      notify(message, "error");
-    } finally {
-      setLoadingTableId(null);
+  const cancelTable = async (table) => {
+    try {
+      await api.post(`/PoolTables/${table.poolTableId}/Cancel`);
+      await loadTables(false);
+      notify(`${getTableName(table)} cancelada.`, "success");
+    } catch (error) {
+      console.error("Error al cancelar mesa:", error);
+      notify("No se pudo cancelar la mesa.", "error");
     }
   };
 
   const chargeTable = async (table) => {
-    if (!onAddTableCharge) {
-      notify("No existe la función para agregar la mesa al carrito.", "error");
-      return;
-    }
-
-    if (!table.startedAtMs) {
-      notify("La mesa no tiene hora de inicio registrada.", "warning");
-      return;
-    }
-
     try {
-      setLoadingTableId(table.poolTableId);
+      const elapsedSeconds = calculateElapsedSeconds(table);
+      const { totalMinutes, total } =
+        calculateTableFinalChargeBySeconds(elapsedSeconds);
 
-      const response = await api.post(`/PoolTables/${table.poolTableId}/Stop`);
+      const tableName = getTableName(table);
 
-      const data = response.data || {};
-
-      const total = data.total ?? data.Total ?? calculateTableCharge(table);
-
-      const totalMinutes =
-        data.totalMinutes ??
-        data.TotalMinutes ??
-        Math.ceil(getElapsedSeconds(table) / 60);
-
-      const tableName = data.name ?? data.Name ?? `Mesa ${table.tableNumber}`;
+      if (typeof onAddTableCharge !== "function") {
+        notify("No está conectada la función para cobrar la mesa.", "error");
+        return;
+      }
 
       await onAddTableCharge({
         productId: tableRentalProduct?.productId ?? null,
-        name: tableRentalProduct
-          ? `${tableRentalProduct.name} - ${tableName}`
-          : tableName,
+        name: `Renta mesa de billar M${table.tableNumber}`,
         quantity: 1,
         unitPrice: Number(total || 0),
         subtotal: Number(total || 0),
+        total: Number(total || 0),
+
         productType: "SERVICE",
         trackInventory: false,
         stock: 0,
+
         requiresBeerSelection: false,
         selectedBeerProductId: null,
         selectedBottleProductId: null,
+        productDrinkSizeId: null,
+        drinkSizeName: null,
+        ouncesUsed: null,
+
         tableId: table.poolTableId,
+        poolTableId: table.poolTableId,
         tableNumber: table.tableNumber,
         tableName,
         tableType: table.tableType,
+
         totalMinutes,
         rentalSeconds: totalMinutes * 60,
-        rentalTimeLabel: formatTime(totalMinutes * 60),
+        rentalTimeLabel: `${totalMinutes} min`,
       });
 
-      await loadTables();
+      await api.post(`/PoolTables/${table.poolTableId}/Stop`);
+      await loadTables(false);
 
-      notify("Mesa agregada al carrito.", "success");
+      notify(`${tableName} enviada al carrito.`, "success");
     } catch (error) {
       console.error("Error al cobrar mesa:", error);
-
-      const message =
-        error.response?.data?.message ||
-        error.response?.data?.Message ||
-        error.response?.data ||
-        "No se pudo cobrar la mesa.";
-
-      notify(message, "error");
-    } finally {
-      setLoadingTableId(null);
+      notify("No se pudo cobrar la mesa.", "error");
     }
   };
 
-  return (
-    <aside className="main-sidebar tables-sidebar">
-      <h2>Mesas</h2>
+  const tableGroups = useMemo(() => {
+    const groups = {
+      normal: [],
+      vip: [],
+      other: [],
+    };
 
-      <div className="tables-list">
-        {tables.length === 0 ? (
-          <p>No hay mesas disponibles.</p>
-        ) : (
-          tables.map((table) => {
-            const isOccupied = table.status === "occupied";
-            const isCarambola = table.tableType === "carambola";
-            const elapsedSeconds = getElapsedSeconds(table);
-            const amount = isOccupied ? calculateTableCharge(table) : 0;
-            const isLoading = loadingTableId === table.poolTableId;
+    tables.forEach((table) => {
+      const type = String(table.tableType || "").toLowerCase();
 
-            return (
-              <div
-                className={`pool-table-wrapper ${
-                  isOccupied ? "pool-table-occupied" : "pool-table-available"
-                }`}
-                key={table.poolTableId}
-              >
-                <div className="pool-table-header">
-                  <strong>
-                    {table.name}: {isCarambola ? "Carambola" : "Pool"}
-                  </strong>
+      if (type.includes("vip")) {
+        groups.vip.push(table);
+        return;
+      }
 
-                  <span>{isOccupied ? "Ocupada" : "Disponible"}</span>
-                </div>
+      if (
+        type.includes("normal") ||
+        type.includes("regular") ||
+        type.trim() === ""
+      ) {
+        groups.normal.push(table);
+        return;
+      }
 
-                <div
-                  className={`pool-table-shape ${
-                    isCarambola
-                      ? "carambola-table-shape"
-                      : "normal-table-shape"
-                  }`}
-                >
-                  {!isCarambola && (
-                    <>
-                      <div className="pool-pocket pocket-top-left"></div>
-                      <div className="pool-pocket pocket-top-center"></div>
-                      <div className="pool-pocket pocket-top-right"></div>
+      groups.other.push(table);
+    });
 
-                      <div className="pool-pocket pocket-bottom-left"></div>
-                      <div className="pool-pocket pocket-bottom-center"></div>
-                      <div className="pool-pocket pocket-bottom-right"></div>
-                    </>
-                  )}
+    return groups;
+  }, [tables]);
 
-                  {isCarambola && (
-                    <>
-                      <div className="carambola-corner-line top-left-line"></div>
-                      <div className="carambola-corner-line top-right-line"></div>
-                      <div className="carambola-corner-line bottom-left-line"></div>
-                      <div className="carambola-corner-line bottom-right-line"></div>
-                    </>
-                  )}
+  const renderTableNoteFlag = (table) => {
+    const tableNote = getTableNote(table);
+    const itemCount = getTableNoteItemCount(tableNote);
+    const isActive = isTableNoteActive(table);
 
-                  {isOccupied && (
-                    <div className="pool-table-timer">
-                      {formatTime(elapsedSeconds)}
-                    </div>
-                  )}
-                </div>
+    return (
+      <button
+        type="button"
+        className={`table-note-flag ${
+          isActive ? "table-note-flag-active" : ""
+        } ${tableNote ? "table-note-flag-has-note" : "table-note-flag-empty"}`}
+        onClick={() => handleOpenTableNote(table)}
+        title={tableNote ? "Abrir nota de mesa" : "Crear nota de mesa"}
+      >
+        <span className="table-note-flag-icon" aria-hidden="true">
+          {tableNote ? "▣" : "+"}
+        </span>
 
-                {isOccupied && (
-                  <div className="pool-table-charge">
-                    Cobro actual: ${amount.toFixed(2)}
-                  </div>
-                )}
+        {tableNote && itemCount > 0 && (
+          <strong className="table-note-flag-count">{itemCount}</strong>
+        )}
+      </button>
+    );
+  };
 
-                {!isOccupied ? (
-                  <button
-                    className="table-start-button"
-                    onClick={() => startTable(table.poolTableId)}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? "Iniciando..." : "Iniciar"}
-                  </button>
-                ) : (
-                  <div className="table-action-buttons">
-                    <button
-                      className="table-charge-button"
-                      onClick={() => chargeTable(table)}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? "Cobrando..." : "Cobrar"}
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })
+  const renderTableShape = (table, elapsedSeconds) => {
+    const isCarambola = String(table.tableType || "")
+      .toLowerCase()
+      .includes("carambola");
+
+    return (
+      <div
+        className={`pool-table-shape ${
+          isCarambola ? "carambola-table-shape" : ""
+        }`}
+      >
+        <span className="pool-pocket pocket-top-left" />
+        <span className="pool-pocket pocket-top-center" />
+        <span className="pool-pocket pocket-top-right" />
+        <span className="pool-pocket pocket-bottom-left" />
+        <span className="pool-pocket pocket-bottom-center" />
+        <span className="pool-pocket pocket-bottom-right" />
+
+        {table.isActive && (
+          <div className="pool-table-timer">
+            {formatElapsedTime(elapsedSeconds)}
+          </div>
         )}
       </div>
+    );
+  };
+
+  const renderTableCard = (table) => {
+    const elapsedSeconds = calculateElapsedSeconds(table);
+    const liveCharge = calculateTableLiveChargeBySeconds(elapsedSeconds);
+    const finalCharge = calculateTableFinalChargeBySeconds(elapsedSeconds);
+
+    const tableNote = getTableNote(table);
+    const itemCount = getTableNoteItemCount(tableNote);
+
+    return (
+      <article
+        className={`pool-table-wrapper ${
+          table.isActive ? "pool-table-occupied" : "pool-table-available"
+        } ${isTableNoteActive(table) ? "pool-table-card-note-active" : ""}`}
+        key={table.poolTableId}
+      >
+        {renderTableNoteFlag(table)}
+
+        <div className="pool-table-header">
+          <strong>Mesa {table.tableNumber}</strong>
+          <span>{table.isActive ? "En uso" : "Libre"}</span>
+        </div>
+
+        {renderTableShape(table, elapsedSeconds)}
+
+        {table.isActive ? (
+          <>
+            <div className="pool-table-charge">
+              Cobro actual: {formatCurrency(liveCharge.total)}
+            </div>
+
+            <div className="pool-table-charge">
+              Final redondeado: {formatCurrency(finalCharge.total)}
+            </div>
+          </>
+        ) : (
+          <div className="pool-table-charge">Disponible</div>
+        )}
+
+        {tableNote && (
+          <div className="pool-table-note-summary">
+            <span>Nota vinculada</span>
+            <strong>
+              {itemCount} producto{itemCount === 1 ? "" : "s"}
+            </strong>
+          </div>
+        )}
+
+        <div className="table-action-buttons">
+          {!table.isActive ? (
+            <button
+              type="button"
+              className="table-start-button"
+              onClick={() => startTable(table)}
+            >
+              Iniciar
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="table-stop-button"
+                onClick={() => cancelTable(table)}
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                className="table-charge-button"
+                onClick={() => chargeTable(table)}
+              >
+                Cobrar
+              </button>
+            </>
+          )}
+        </div>
+      </article>
+    );
+  };
+
+  const renderTableSection = (title, sectionTables) => {
+    if (!sectionTables || sectionTables.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className="pool-table-section">
+        <div className="pool-table-section-header">
+          <h2>{title}</h2>
+          <span>{sectionTables.length}</span>
+        </div>
+
+        <div className="tables-list">{sectionTables.map(renderTableCard)}</div>
+      </section>
+    );
+  };
+
+  return (
+    <aside className="tables-sidebar">
+      <div className="tables-sidebar-header">
+        <div>
+          <h2>Mesas</h2>
+          <p>Control de tiempo y notas</p>
+        </div>
+
+        <button
+          type="button"
+          className="tables-refresh-button"
+          onClick={() => loadTables()}
+          disabled={loadingTables}
+          title="Actualizar mesas"
+        >
+          ↻
+        </button>
+      </div>
+
+      {loadingTables && tables.length === 0 ? (
+        <p className="tables-loading-text">Cargando mesas...</p>
+      ) : tables.length === 0 ? (
+        <p className="tables-empty-text">No hay mesas registradas.</p>
+      ) : (
+        <div className="tables-sidebar-content">
+          {renderTableSection("Mesas normales", tableGroups.normal)}
+          {renderTableSection("Mesas VIP", tableGroups.vip)}
+          {renderTableSection("Otras mesas", tableGroups.other)}
+        </div>
+      )}
     </aside>
   );
 }

@@ -54,7 +54,83 @@ function InventoryPanel() {
   };
 
   const normalizeText = (value) => {
-    return String(value || "").toLowerCase().trim();
+    return String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .trim();
+  };
+
+  const getBeerOrder = (productName) => {
+    const name = normalizeText(productName);
+
+    if (name.includes("tecate")) return 1;
+    if (name.includes("indio")) return 2;
+    if (name.includes("miller") || name.includes("miler")) return 3;
+    if (name.includes("ultra")) return 4;
+    if (name.includes("bud light") || name.includes("budlight")) return 5;
+    if (name.includes("corona")) return 6;
+
+    return 99;
+  };
+
+  const isBeerProduct = (product) => {
+    const name = normalizeText(product?.name);
+    const category = normalizeText(product?.category);
+
+    return (
+      Boolean(product?.isBeer) ||
+      category.includes("cerveza") ||
+      name.includes("tecate") ||
+      name.includes("indio") ||
+      name.includes("miller") ||
+      name.includes("miler") ||
+      name.includes("ultra") ||
+      name.includes("bud light") ||
+      name.includes("budlight") ||
+      name.includes("corona")
+    );
+  };
+
+  const sortProductsByBeerOrder = (a, b) => {
+    const isBeerA = isBeerProduct(a);
+    const isBeerB = isBeerProduct(b);
+
+    if (isBeerA && isBeerB) {
+      const orderA = getBeerOrder(a.name);
+      const orderB = getBeerOrder(b.name);
+
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+    }
+
+    return normalizeText(a.name).localeCompare(normalizeText(b.name));
+  };
+
+  const sortInventoryProducts = (a, b) => {
+    if (a.isProtected !== b.isProtected) {
+      return a.isProtected ? 1 : -1;
+    }
+
+    const categoryA = normalizeText(a.category);
+    const categoryB = normalizeText(b.category);
+
+    const isBeerA = isBeerProduct(a);
+    const isBeerB = isBeerProduct(b);
+
+    if (isBeerA && isBeerB) {
+      return sortProductsByBeerOrder(a, b);
+    }
+
+    if (isBeerA !== isBeerB) {
+      return isBeerA ? -1 : 1;
+    }
+
+    const categoryCompare = categoryA.localeCompare(categoryB);
+    if (categoryCompare !== 0) return categoryCompare;
+
+    return normalizeText(a.name).localeCompare(normalizeText(b.name));
   };
 
   const isProtectedInventoryProduct = (product) => {
@@ -135,16 +211,7 @@ function InventoryPanel() {
 
       const normalizedInventory = response.data
         .map(normalizeInventoryProduct)
-        .sort((a, b) => {
-          if (a.isProtected !== b.isProtected) {
-            return a.isProtected ? 1 : -1;
-          }
-
-          const categoryCompare = a.category.localeCompare(b.category);
-          if (categoryCompare !== 0) return categoryCompare;
-
-          return a.name.localeCompare(b.name);
-        });
+        .sort(sortInventoryProducts);
 
       setInventory(normalizedInventory);
 
@@ -311,18 +378,36 @@ function InventoryPanel() {
     return labels[productType] || productType || "Producto";
   };
 
+const getInventoryCategoryOrder = (categoryName) => {
+  const name = normalizeText(categoryName);
+
+  if (name.includes("cerveza")) return 1;
+  if (name.includes("bebidas preparadas")) return 2;
+  if (name.includes("shots")) return 3;
+  if (name.includes("bebidas embotelladas")) return 4;
+  if (name.includes("botellas")) return 5;
+  if (name.includes("snacks")) return 6;
+  if (name.includes("cigarros")) return 7;
+  if (name.includes("servicios")) return 8;
+  if (name.includes("inventarios base protegidos")) return 99;
+
+  return 50;
+};
+
   const filteredInventory = useMemo(() => {
-    const normalizedSearch = searchTerm.toLowerCase().trim();
+    const normalizedSearch = normalizeText(searchTerm);
 
-    if (!normalizedSearch) return inventory;
+    const filtered = !normalizedSearch
+      ? inventory
+      : inventory.filter((product) => {
+          return (
+            normalizeText(product.name).includes(normalizedSearch) ||
+            normalizeText(product.category).includes(normalizedSearch) ||
+            normalizeText(product.productType).includes(normalizedSearch)
+          );
+        });
 
-    return inventory.filter((product) => {
-      return (
-        product.name.toLowerCase().includes(normalizedSearch) ||
-        product.category.toLowerCase().includes(normalizedSearch) ||
-        product.productType.toLowerCase().includes(normalizedSearch)
-      );
-    });
+    return [...filtered].sort(sortInventoryProducts);
   }, [inventory, searchTerm]);
 
   const groupedInventory = filteredInventory.reduce((groups, product) => {
@@ -340,11 +425,15 @@ function InventoryPanel() {
   }, {});
 
   const orderedCategoryNames = Object.keys(groupedInventory).sort((a, b) => {
-    if (a === "Inventarios base protegidos") return 1;
-    if (b === "Inventarios base protegidos") return -1;
+  const orderA = getInventoryCategoryOrder(a);
+  const orderB = getInventoryCategoryOrder(b);
 
-    return a.localeCompare(b);
-  });
+  if (orderA !== orderB) {
+    return orderA - orderB;
+  }
+
+  return a.localeCompare(b);
+});
 
   return (
     <div className="page-card inventory-panel">
@@ -384,7 +473,7 @@ function InventoryPanel() {
               </div>
 
               <div className="inventory-grid">
-                {groupedInventory[categoryName].map((product) => {
+                {[...groupedInventory[categoryName]].sort(sortInventoryProducts).map((product) => {
                   const isLoading = loadingProductId === product.productId;
                   const isDisabled = product.isProtected || isLoading;
 

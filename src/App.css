@@ -1699,7 +1699,9 @@ button:disabled {
   .pool-table-charge {
     font-size: 1rem;
   }
-}.cash-payment-box {
+}
+
+.cash-payment-box {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1794,10 +1796,6 @@ button:disabled {
   font-weight: 700;
 }
 
-.cash-change-negative {
-  color: #b00020;
-}
-
 .cash-warning {
   margin: 0;
   font-size: 0.95rem;
@@ -1805,36 +1803,7 @@ button:disabled {
   color: #b00020;
 }
 
-.pos-numpad-sidebar {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 12px;
-}
 
-.pos-numpad-sidebar button {
-  font-size: 1.35rem;
-  font-weight: 800;
-  padding: 14px;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-}
-
-.pos-numpad-sidebar .numpad-wide {
-  grid-column: span 3;
-}
-
-@media (max-width: 768px) {
-  .cash-sidebar-input {
-    font-size: 2.4rem;
-  }
-
-  .pos-numpad-sidebar button {
-    font-size: 1.6rem;
-    padding: 18px;
-  }
-}
 .drink-sizes-section {
   margin-top: 18px;
   padding: 16px;
@@ -1927,7 +1896,7 @@ button:disabled {
   height: 90px;
   border-radius: 12px;
   overflow: hidden;
-  display: flex;
+  display: contain;
   align-items: center;
   justify-content: center;
 }
@@ -2185,31 +2154,75 @@ button:not(:disabled):hover {
   font-weight: 900;
 }
 
-.pos-numpad,
+/* ============================================================
+   POS — NUMPAD FIJO EN CARRITO
+============================================================ */
+
 .pos-numpad-sidebar {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 12px;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+
+  width: 100% !important;
+  margin-top: 12px !important;
+  margin-bottom: 10px !important;
+  padding: 10px !important;
+
+  border-radius: 16px !important;
+  background: #f8fafc !important;
+  border: 1px solid #e5e7eb !important;
 }
 
-.pos-numpad button,
+.pos-numpad-sidebar .numpad-grid {
+  display: contents !important;
+}
+
 .pos-numpad-sidebar button {
-  font-size: 1.35rem;
-  font-weight: 900;
-  padding: 14px;
-  border-radius: 12px;
-  background: #e5e5e5;
-  color: #000000;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 44px !important;
+
+  padding: 10px !important;
+  border-radius: 12px !important;
+  border: 1px solid #d1d5db !important;
+
+  background: #ffffff !important;
+  color: #000000 !important;
+
+  font-size: 1.25rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
 }
 
-.pos-numpad .numpad-wide,
+.pos-numpad-sidebar button:hover {
+  background: #f3f4f6 !important;
+}
+
 .pos-numpad-sidebar .numpad-wide {
-  grid-column: span 3;
+  grid-column: 1 / -1 !important;
   background: #000000 !important;
   color: #ffffff !important;
 }
 
+@media (max-width: 768px) {
+  .pos-numpad-sidebar {
+    gap: 8px !important;
+    padding: 10px !important;
+  }
+
+  .pos-numpad-sidebar button {
+    min-height: 52px !important;
+    font-size: 1.35rem !important;
+    padding: 12px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .pos-numpad-sidebar button {
+    min-height: 50px !important;
+    font-size: 1.25rem !important;
+  }
+}
 /* ============================================================
    PRODUCTOS — TAMAÑOS DE BEBIDA EN FORMULARIO
    ============================================================ */
@@ -2261,13 +2274,6 @@ button:not(:disabled):hover {
 .add-drink-size-button {
   background: #000000 !important;
   color: #ffffff !important;
-}
-
-.drink-sizes-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 14px;
 }
 
 .empty-drink-sizes {
@@ -2377,12 +2383,6 @@ button:not(:disabled):hover {
   justify-content: center;
   background: #ffffff;
   border: 3px solid #000000;
-}
-
-.drink-size-card-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 .drink-size-card-image span {
@@ -2847,11 +2847,6 @@ button:not(:disabled):hover {
     height: 220px;
   }
 
-  .drink-size-form,
-  .drink-size-item {
-    grid-template-columns: 1fr;
-  }
-
   .inventory-grid {
     grid-template-columns: 1fr;
   }
@@ -3203,16 +3198,6 @@ button:not(:disabled):hover {
   .pos-main {
     min-height: auto;
   }
-
-  .cart-sidebar {
-    position: static;
-    max-height: none;
-  }
-
-  .tables-sidebar .tables-list,
-  .cart-sidebar .cart-items {
-    overflow-y: visible;
-  }
 }
 
 @media (max-width: 768px) {
@@ -3466,5 +3451,2676 @@ button:not(:disabled):hover {
 
   .tables-sidebar .tables-list {
     overflow: visible !important;
+  }
+}
+
+/* ============================================================
+   NOTAS DE BARRA - DISEÑO SIMPLE AZUL SIN ARGOLLAS
+============================================================ */
+
+.pos-title-with-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Botón superior para abrir panel de notas */
+.bar-notes-button {
+  min-width: 150px;
+  min-height: 56px;
+  border-radius: 14px;
+  background: #1d4ed8 !important;
+  color: #ffffff !important;
+  padding: 8px 12px;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(29, 78, 216, 0.24);
+}
+
+.bar-notes-button span,
+.bar-notes-button strong,
+.bar-notes-button small {
+  display: block;
+  color: #ffffff !important;
+}
+
+.bar-notes-button span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bar-notes-button strong {
+  font-size: 0.95rem;
+  margin-top: 2px;
+}
+
+.bar-notes-button small {
+  font-size: 0.74rem;
+  margin-top: 2px;
+  opacity: 0.9;
+}
+
+/* Panel flotante */
+.bar-note-overlay {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  z-index: 1800;
+  width: 430px;
+  max-width: calc(100vw - 28px);
+}
+
+.bar-note-panel {
+  width: 100%;
+  max-height: calc(100vh - 28px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  background: #8bb5ea;
+  color: #000000 !important;
+  border: 2px solid #4f86c6;
+  border-radius: 14px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.28);
+}
+
+/* Encabezado */
+.bar-note-panel-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  background: #6fa2df;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+.bar-note-panel-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 900;
+  color: #000000 !important;
+}
+
+.bar-note-panel-header button {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: #000000 !important;
+  color: #ffffff !important;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+/* Lista lateral de notas abiertas */
+.bar-notes-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.22);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+.bar-notes-list::-webkit-scrollbar {
+  height: 6px;
+}
+
+.bar-notes-list::-webkit-scrollbar-thumb {
+  background: #1d4ed8;
+  border-radius: 999px;
+}
+
+.bar-note-chip {
+  flex: 0 0 auto;
+  min-width: 110px;
+  max-width: 150px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 2px solid transparent;
+  font-weight: 900;
+  text-align: left;
+}
+
+.bar-note-chip strong,
+.bar-note-chip small {
+  display: block;
+  color: #000000 !important;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bar-note-chip strong {
+  font-size: 0.86rem;
+}
+
+.bar-note-chip small {
+  font-size: 0.72rem;
+  margin-top: 2px;
+}
+
+.bar-note-chip-active {
+  border-color: #000000;
+  background: #dbeafe !important;
+}
+
+/* Botón nueva nota */
+.new-bar-note-button {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #000000 !important;
+  color: #ffffff !important;
+  font-weight: 900;
+}
+
+/* Cuerpo */
+.bar-note-body {
+  padding: 12px;
+  overflow-y: auto;
+}
+
+/* Nombre arriba */
+.bar-note-name-input {
+  width: 100%;
+  background: transparent !important;
+  color: #000000 !important;
+  border: none !important;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.3) !important;
+  border-radius: 0 !important;
+  padding: 4px 6px 8px !important;
+  font-size: 1.55rem !important;
+  font-weight: 500 !important;
+  text-align: center;
+}
+
+.bar-note-name-input::placeholder {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+.bar-note-name-input:focus {
+  outline: none !important;
+  border-bottom-color: #000000 !important;
+}
+
+/* Activar nota */
+.bar-note-open-button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 999px;
+  background: #7ed957 !important;
+  color: #000000 !important;
+  font-weight: 900;
+}
+
+/* Productos */
+.bar-note-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 270px;
+  overflow-y: auto;
+  margin-top: 12px;
+}
+
+.bar-note-items::-webkit-scrollbar {
+  width: 6px;
+}
+
+.bar-note-items::-webkit-scrollbar-thumb {
+  background: #1d4ed8;
+  border-radius: 999px;
+}
+
+.bar-note-empty {
+  margin: 16px 0;
+  text-align: center;
+  color: #000000 !important;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.bar-note-item {
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) 72px 72px;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 4px;
+  background: transparent !important;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+.bar-note-item strong,
+.bar-note-item span,
+.bar-note-item b {
+  color: #000000 !important;
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+.bar-note-item strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar-note-item span {
+  text-align: center;
+}
+
+.bar-note-item b {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Total */
+.bar-note-total {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+  padding: 10px 4px;
+  border-top: 2px solid rgba(255, 255, 255, 0.45);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.45);
+}
+
+.bar-note-total span,
+.bar-note-total strong {
+  color: #000000 !important;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.bar-note-total span {
+  text-align: right;
+}
+
+.bar-note-total strong {
+  text-align: right;
+}
+
+/* Acciones */
+.bar-note-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.bar-note-cancel-button,
+.bar-note-charge-button {
+  min-width: 100px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  color: #000000 !important;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.bar-note-cancel-button {
+  background: #ff1616 !important;
+}
+
+.bar-note-charge-button {
+  background: #7ed957 !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .bar-note-overlay {
+    position: fixed;
+    left: 10px;
+    top: 10px;
+    width: calc(100vw - 20px);
+  }
+
+  .bar-note-panel {
+    max-height: calc(100vh - 20px);
+  }
+
+  .bar-note-name-input {
+    font-size: 1.25rem !important;
+  }
+
+  .bar-note-item {
+    grid-template-columns: minmax(0, 1.25fr) 58px 64px;
+  }
+
+  .bar-note-item strong,
+  .bar-note-item span,
+  .bar-note-item b {
+    font-size: 0.86rem;
+  }
+
+  .bar-note-actions {
+    flex-direction: column;
+  }
+
+  .bar-note-cancel-button,
+  .bar-note-charge-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 430px) {
+  .bar-notes-list {
+    flex-wrap: nowrap;
+  }
+
+  .bar-note-chip {
+    min-width: 100px;
+  }
+
+  .bar-note-item {
+    grid-template-columns: minmax(0, 1fr) 52px 58px;
+  }
+}
+/* ============================================================
+   NOTAS - CARD / STICKY CUADERNO SIMPLE
+============================================================ */
+
+.bar-notes-button {
+  min-width: 150px;
+  min-height: 56px;
+  border: 2px solid #1d4ed8;
+  border-radius: 14px;
+  background: #1d4ed8 !important;
+  color: #ffffff !important;
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 900;
+}
+
+.bar-notes-button span {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.bar-notes-button small {
+  font-size: 0.72rem;
+  margin-top: 2px;
+}
+
+.bar-note-overlay {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  z-index: 1800;
+  width: 420px;
+  max-width: calc(100vw - 28px);
+}
+
+.bar-note-panel {
+  width: 100%;
+  max-height: calc(100vh - 28px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid #1d4ed8;
+  border-radius: 16px;
+  background: #8db8ed;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
+}
+
+.bar-note-panel-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  background: #6fa2df;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+.bar-note-panel-header h2 {
+  margin: 0;
+  color: #000000 !important;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.bar-note-panel-header button {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: #000000 !important;
+  color: #ffffff !important;
+  font-weight: 900;
+}
+
+.bar-notes-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.bar-note-chip {
+  flex: 0 0 auto;
+  min-width: 110px;
+  max-width: 150px;
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 2px solid transparent;
+  text-align: left;
+  font-weight: 900;
+}
+
+.bar-note-chip strong,
+.bar-note-chip small {
+  display: block;
+  color: #000000 !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar-note-chip strong {
+  font-size: 0.85rem;
+}
+
+.bar-note-chip small {
+  font-size: 0.72rem;
+}
+
+.new-bar-note-button {
+  flex: 0 0 auto;
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: #000000 !important;
+  color: #ffffff !important;
+  font-weight: 900;
+}
+
+.bar-note-body {
+  padding: 12px;
+  overflow-y: auto;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 35px,
+      rgba(255, 255, 255, 0.38) 36px,
+      rgba(255, 255, 255, 0.38) 38px
+    ),
+    #8db8ed;
+}
+
+.bar-note-name-input {
+  width: 100%;
+  background: transparent !important;
+  color: #000000 !important;
+  border: none !important;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.35) !important;
+  border-radius: 0 !important;
+  padding: 4px 6px 8px !important;
+  font-size: clamp(1.1rem, 4vw, 1.45rem) !important;
+  font-weight: 700 !important;
+  text-align: center;
+}
+
+.bar-note-open-button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 999px;
+  background: #7ed957 !important;
+  color: #000000 !important;
+  font-weight: 900;
+}
+
+.bar-note-items {
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-top: 12px;
+}
+
+.bar-note-empty {
+  text-align: center;
+  color: #000000 !important;
+  font-weight: 800;
+}
+
+.bar-note-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) 60px 72px;
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 4px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.38);
+}
+
+.bar-note-item strong,
+.bar-note-item span,
+.bar-note-item b {
+  color: #000000 !important;
+  font-size: clamp(0.82rem, 2.5vw, 0.98rem);
+  font-weight: 700;
+}
+
+.bar-note-total {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px 4px;
+  border-top: 2px solid rgba(255, 255, 255, 0.45);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.45);
+}
+
+.bar-note-total span,
+.bar-note-total strong {
+  color: #000000 !important;
+  font-size: 1rem;
+  font-weight: 900;
+  text-align: right;
+}
+
+.bar-note-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.bar-note-cancel-button,
+.bar-note-charge-button {
+  min-width: 92px;
+  padding: 9px 12px;
+  border-radius: 999px;
+  color: #000000 !important;
+  font-weight: 900;
+}
+
+@media (max-width: 768px) {
+
+  .bar-note-item {
+    grid-template-columns: minmax(0, 1fr) 52px 62px;
+  }
+}
+
+/* ============================================================
+   HEADER DE COMANDAS - MINI NOTAS
+============================================================ */
+
+.pos-header-notes {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px 0 14px;
+  margin-bottom: 8px;
+}
+
+.mini-notes-strip {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 6px 4px 10px;
+}
+
+.mini-notes-strip::-webkit-scrollbar {
+  height: 6px;
+}
+
+.mini-notes-strip::-webkit-scrollbar-thumb {
+  background: #1d4ed8;
+  border-radius: 999px;
+}
+
+.mini-command-note {
+  flex: 0 0 auto;
+  width: 112px;
+  min-height: 86px;
+  padding: 9px 8px;
+  border-radius: 8px;
+  border: 2px solid #1d4ed8;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      #dbeafe 0,
+      #dbeafe 20px,
+      #bfdbfe 21px,
+      #bfdbfe 22px
+    );
+  color: #000000;
+  cursor: pointer;
+  box-shadow: 0 4px 0 rgba(15, 23, 42, 0.18);
+  transform: rotate(-1deg);
+}
+
+.mini-command-note:nth-child(even) {
+  transform: rotate(1deg);
+}
+
+.mini-command-note-active {
+  border-color: #000000;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      #bfdbfe 0,
+      #bfdbfe 20px,
+      #93c5fd 21px,
+      #93c5fd 22px
+    );
+}
+
+.mini-command-note strong,
+.mini-command-note span,
+.mini-command-note b {
+  display: block;
+  color: #000000 !important;
+}
+
+.mini-command-note strong {
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1.12;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-command-note span {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.mini-command-note b {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.mini-command-add {
+  flex: 0 0 auto;
+  width: 92px;
+  min-height: 86px;
+  border-radius: 8px;
+  border: 2px dashed #000000;
+  background: #ffffff !important;
+  color: #000000 !important;
+  font-weight: 900;
+}
+
+/* ============================================================
+   PANEL NOTA - COMANDA SIMPLE
+============================================================ */
+
+.bar-note-overlay {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  z-index: 1800;
+  width: 400px;
+  max-width: calc(100vw - 28px);
+}
+
+.bar-note-panel {
+  width: 100%;
+  max-height: calc(100vh - 28px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 2px solid #1d4ed8;
+  background: #dbeafe;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.28);
+}
+
+.bar-note-panel-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  background: #93c5fd;
+  border-bottom: 2px solid #60a5fa;
+}
+
+.bar-notes-list {
+  display: none;
+}
+
+.bar-note-body {
+  padding: 12px;
+  overflow-y: auto;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 34px,
+      rgba(37, 99, 235, 0.18) 35px,
+      rgba(37, 99, 235, 0.18) 36px
+    ),
+    #dbeafe;
+}
+
+.bar-note-name-input {
+  width: 100%;
+  background: transparent !important;
+  color: #000000 !important;
+  border: none !important;
+  border-bottom: 2px solid #1d4ed8 !important;
+  border-radius: 0 !important;
+  padding: 4px 6px 8px !important;
+  font-size: clamp(1.1rem, 4vw, 1.4rem) !important;
+  font-weight: 800 !important;
+  text-align: center;
+}
+
+.bar-note-open-button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 999px;
+  background: #22c55e !important;
+  color: #000000 !important;
+  font-weight: 900;
+}
+
+.bar-note-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) 58px 72px;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  padding: 5px 4px;
+  border-bottom: 1px solid rgba(37, 99, 235, 0.28);
+}
+
+.bar-note-item strong,
+.bar-note-item span,
+.bar-note-item b {
+  color: #000000 !important;
+  font-size: clamp(0.8rem, 2.5vw, 0.95rem);
+  font-weight: 700;
+}
+
+.bar-note-total {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px 4px;
+  border-top: 2px solid #1d4ed8;
+  border-bottom: 2px solid #1d4ed8;
+}
+
+.bar-note-cancel-button {
+  background: #ef4444 !important;
+}
+
+.bar-note-charge-button {
+  background: #22c55e !important;
+}
+
+@media (max-width: 768px) {
+
+  .mini-command-note {
+    width: 100px;
+    min-height: 78px;
+  }
+
+  .mini-command-add {
+    width: 86px;
+    min-height: 78px;
+  }
+
+  .bar-note-item {
+    grid-template-columns: minmax(0, 1fr) 48px 62px;
+  }
+}
+
+.report-category-row td {
+  background: #111827 !important;
+  color: #ffffff !important;
+  font-weight: 900;
+  border-top: 2px solid #000000;
+}
+
+.report-category-row strong {
+  color: #ffffff !important;
+}
+
+.report-table tfoot td {
+  font-weight: 900;
+  background: #f3f4f6;
+  border-top: 3px solid #111827;
+}
+.payment-method-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.payment-method-button {
+  width: 100%;
+  padding: 11px 10px;
+  border-radius: 14px;
+  border: 1px solid #d6ccc2;
+  background: #ffffff;
+  color: #000000;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.payment-method-button:hover {
+  background: #f3f4f6;
+}
+
+.payment-method-button-active {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border-color: #000000 !important;
+}
+
+.courtesy-reference-box {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.courtesy-reference-box label {
+  display: block;
+  margin-bottom: 6px;
+  color: #000000 !important;
+  font-weight: 900;
+}
+
+.courtesy-reference-box input {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff !important;
+  color: #000000 !important;
+  font-weight: 800;
+}
+
+.courtesy-count,
+.courtesy-red {
+  color: #dc2626 !important;
+  font-weight: 900;
+}
+
+.credit-count,
+.credit-orange {
+  color: #f97316 !important;
+  font-weight: 900;
+}
+
+.report-summary-card small {
+  display: block;
+  margin-top: 4px;
+  color: #374151 !important;
+  font-weight: 800;
+}
+.credit-pending-button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid #f97316;
+  background: #fff7ed;
+  color: #9a3412;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.credit-pending-button:hover {
+  background: #fed7aa;
+}
+
+.cashbox-sidebar-card {
+  margin-bottom: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.cashbox-sidebar-card span {
+  display: block;
+  color: #374151;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.cashbox-sidebar-card strong {
+  display: block;
+  margin-top: 4px;
+  color: #000000;
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+
+.cashbox-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cashbox-actions button {
+  padding: 9px 6px;
+  border-radius: 12px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #000000;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cashbox-actions button:hover {
+  background: #f3f4f6;
+}
+
+.cash-cut-modal {
+  max-width: 520px;
+}
+
+.cash-cut-summary {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.cash-cut-summary div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.cash-cut-summary span {
+  color: #374151;
+  font-weight: 800;
+}
+
+.cash-cut-summary strong {
+  color: #000000;
+  font-weight: 900;
+}
+
+/* ============================================================
+   POS — CRÉDITOS PENDIENTES
+============================================================ */
+
+.credit-pending-button {
+  width: 100%;
+  margin-top: 12px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #f97316 !important;
+  background: #fff7ed !important;
+  color: #9a3412 !important;
+  font-size: 0.95rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.credit-pending-button:hover {
+  background: #fed7aa !important;
+}
+
+.pending-credit-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.pending-credit-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 2px solid #f97316;
+  background: #fff7ed;
+  color: #000000;
+}
+
+.pending-credit-card strong {
+  color: #000000 !important;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.pending-credit-card span {
+  color: #7c2d12 !important;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.pending-credit-card b {
+  color: #9a3412 !important;
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+
+.pending-credit-card button {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #000000 !important;
+  color: #ffffff !important;
+  font-weight: 900;
+}
+
+.pending-credit-card button:hover {
+  background: #1f2937 !important;
+}
+
+.pending-credit-products {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #fdba74;
+}
+
+.pending-credit-product {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.pending-credit-product span {
+  color: #431407 !important;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pending-credit-product b {
+  color: #431407 !important;
+  font-size: 0.82rem;
+}
+
+/* Modal de créditos */
+.credit-modal {
+  max-width: 780px;
+}
+
+.credit-modal .beer-selector-header p {
+  color: #4b5563 !important;
+  font-weight: 800;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .pending-credit-list {
+    grid-template-columns: 1fr;
+  }
+
+  .pending-credit-card {
+    padding: 12px;
+  }
+
+  .pending-credit-card b {
+    font-size: 1.2rem;
+  }
+}
+
+/* ============================================================
+   CRÉDITOS PENDIENTES — NOTAS TIPO COMANDA
+============================================================ */
+
+.credit-modal {
+  width: min(980px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.credit-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.credit-note-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 340px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 2px solid #f97316;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 34px,
+      rgba(249, 115, 22, 0.22) 35px,
+      rgba(249, 115, 22, 0.22) 36px
+    ),
+    #fff7ed;
+  color: #000000;
+  box-shadow: 0 8px 0 rgba(154, 52, 18, 0.18);
+  transform: rotate(-0.5deg);
+}
+
+.credit-note-card:nth-child(even) {
+  transform: rotate(0.5deg);
+}
+
+.credit-note-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid rgba(249, 115, 22, 0.45);
+}
+
+.credit-note-header strong {
+  color: #000000 !important;
+  font-size: 1.15rem;
+  font-weight: 900;
+  line-height: 1.15;
+  word-break: break-word;
+}
+
+.credit-note-header span {
+  color: #7c2d12 !important;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.credit-note-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  margin-top: 12px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.credit-note-items::-webkit-scrollbar {
+  width: 6px;
+}
+
+.credit-note-items::-webkit-scrollbar-thumb {
+  background: #f97316;
+  border-radius: 999px;
+}
+
+.credit-note-empty {
+  margin: 12px 0;
+  color: #7c2d12 !important;
+  font-weight: 900;
+  text-align: center;
+}
+
+.credit-note-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 46px 78px;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(249, 115, 22, 0.28);
+}
+
+.credit-note-item strong,
+.credit-note-item span,
+.credit-note-item b {
+  color: #000000 !important;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.credit-note-item strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.credit-note-item span {
+  text-align: center;
+}
+
+.credit-note-item b {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.credit-note-total {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  gap: 8px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 10px 0;
+  border-top: 2px solid rgba(249, 115, 22, 0.55);
+  border-bottom: 2px solid rgba(249, 115, 22, 0.55);
+}
+
+.credit-note-total span,
+.credit-note-total strong {
+  color: #000000 !important;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.credit-note-total span {
+  text-align: right;
+}
+
+.credit-note-total strong {
+  text-align: right;
+}
+
+.credit-note-send-button {
+  width: 100%;
+  margin-top: 14px;
+  padding: 11px 14px;
+  border-radius: 999px;
+  background: #f97316 !important;
+  color: #000000 !important;
+  font-weight: 900;
+}
+
+.credit-note-send-button:hover {
+  background: #fb923c !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .credit-modal {
+    width: 100%;
+    max-height: none;
+  }
+
+  .credit-notes-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .credit-note-card {
+    min-height: auto;
+    transform: none;
+  }
+
+  .credit-note-card:nth-child(even) {
+    transform: none;
+  }
+
+  .credit-note-item {
+    grid-template-columns: minmax(0, 1fr) 42px 72px;
+  }
+
+  .credit-note-item strong,
+  .credit-note-item span,
+  .credit-note-item b {
+    font-size: 0.84rem;
+  }
+}
+/* ============================================================
+   HISTORIAL DE VENTAS — CRÉDITOS Y CORTESÍAS
+============================================================ */
+
+.sale-card-info-full {
+  grid-column: 1 / -1;
+}
+
+.sale-card-info-full strong {
+  word-break: break-word;
+}
+
+.sale-status-completed {
+  background: #dcfce7 !important;
+  color: #166534 !important;
+}
+
+.sale-status-courtesy {
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+}
+
+.sale-status-credit {
+  background: #fff7ed !important;
+  color: #9a3412 !important;
+}
+
+.sale-status-paid-credit {
+  background: #dbeafe !important;
+  color: #1e40af !important;
+}
+
+.sale-detail-button {
+  width: 100%;
+  margin-top: 14px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  background: #000000 !important;
+  color: #ffffff !important;
+  font-weight: 900;
+}
+
+.sale-card h3 {
+  margin: 6px 0 0;
+  font-size: 1.45rem;
+  font-weight: 900;
+  color: #000000;
+}
+
+.sale-card-info {
+  align-items: start;
+}
+
+@media (max-width: 480px) {
+  .sale-card-info {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   HISTORIAL DE VENTAS — CRÉDITOS, PAGOS Y CORTESÍAS
+============================================================ */
+
+.sale-card-info-full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 480px) {
+}
+
+/* ============================================================
+   CORTE DE CAJA — MODAL
+============================================================ */
+
+.cash-cut-modal {
+  width: min(560px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.cash-cut-modal h2 {
+  color: #000000 !important;
+  font-size: 1.55rem;
+  font-weight: 900;
+}
+
+.cash-cut-summary div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.cash-cut-summary span {
+  color: #374151 !important;
+  font-weight: 800;
+}
+
+.cash-cut-summary strong {
+  color: #000000 !important;
+  font-weight: 900;
+  text-align: right;
+}
+
+.cash-cut-total-row {
+  background: #111827 !important;
+  border-color: #111827 !important;
+}
+
+.cash-cut-total-row span,
+.cash-cut-total-row strong {
+  color: #ffffff !important;
+}
+
+@media (max-width: 480px) {
+  .cash-cut-summary div {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cash-cut-summary strong {
+    text-align: left;
+  }
+}
+
+/* ============================================================
+   POS — HISTORIAL DE CORTES DE CAJA
+============================================================ */
+
+.cashbox-actions-four {
+  grid-template-columns: repeat(2, 1fr) !important;
+}
+
+.cash-cuts-modal {
+  width: min(760px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.cash-cuts-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.cash-cut-card {
+  padding: 14px;
+  border-radius: 16px;
+  border: 2px solid #111827;
+  background: #f8fafc;
+  color: #000000;
+}
+
+.cash-cut-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.cash-cut-card-header strong {
+  color: #000000 !important;
+  font-weight: 900;
+}
+
+.cash-cut-card-header span {
+  color: #374151 !important;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.cash-cut-card-amount {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  background: #111827;
+}
+
+.cash-cut-card-amount span,
+.cash-cut-card-amount strong {
+  color: #ffffff !important;
+  font-weight: 900;
+}
+
+.cash-cut-card p {
+  margin: 12px 0 0;
+  color: #374151 !important;
+  font-weight: 700;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+@media (max-width: 480px) {
+  .cashbox-actions-four {
+    grid-template-columns: 1fr !important;
+  }
+
+  .cash-cuts-list {
+    grid-template-columns: 1fr;
+  }
+
+  .cash-cut-card-header,
+  .cash-cut-card-amount {
+    flex-direction: column;
+  }
+
+  .cash-cut-card-header span {
+    text-align: left;
+  }
+}
+
+/* ============================================================
+   POS — HISTORIAL DETALLADO DE CORTES
+============================================================ */
+
+.cash-cuts-modal {
+  width: min(920px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.cash-cuts-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.cash-cut-card {
+  padding: 16px;
+  border-radius: 18px;
+  border: 2px solid #111827;
+  background: #f8fafc;
+  color: #000000;
+}
+
+.cash-cut-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.cash-cut-card-header strong,
+.cash-cut-card-header small,
+.cash-cut-card-header span {
+  display: block;
+}
+
+.cash-cut-card-header small {
+  margin-top: 4px;
+  color: #374151 !important;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.cash-cut-card-header span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #111827;
+  color: #ffffff !important;
+  font-size: 0.75rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.cash-cut-card-period {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+}
+
+.cash-cut-card-period span {
+  display: block;
+  margin-bottom: 4px;
+  color: #374151 !important;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.cash-cut-card-period strong {
+  color: #000000 !important;
+  font-size: 0.9rem;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.cash-cut-detail-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cash-cut-detail-grid div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+}
+
+.cash-cut-detail-grid span {
+  color: #374151 !important;
+  font-weight: 800;
+}
+
+.cash-cut-detail-grid strong {
+  color: #000000 !important;
+  font-weight: 900;
+  text-align: right;
+}
+
+.cash-cut-final-row {
+  background: #dcfce7 !important;
+  border-color: #86efac !important;
+}
+
+.cash-cut-final-row span,
+.cash-cut-final-row strong {
+  color: #166534 !important;
+}
+
+.cash-cut-description {
+  margin: 12px 0 0;
+  color: #374151 !important;
+  font-weight: 700;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+@media (max-width: 480px) {
+
+  .cash-cut-card-header,
+  .cash-cut-detail-grid div {
+    flex-direction: column;
+  }
+
+  .cash-cut-detail-grid strong {
+    text-align: left;
+  }
+}
+
+/* ============================================================
+   POS — MODAL ÚNICO PARA BEBIDAS CON LICOR
+============================================================ */
+
+.liquor-selection-modal {
+  width: min(960px, 94vw);
+  max-height: 92vh;
+  overflow-y: auto;
+}
+
+.liquor-modal-section {
+  margin-top: 16px;
+}
+
+.liquor-section-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.liquor-section-title strong {
+  color: #000000 !important;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.liquor-section-title span {
+  color: #374151 !important;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+/* =======================
+   TAMAÑOS
+======================= */
+
+.liquor-size-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.liquor-size-card {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 16px;
+  border: 2px solid #e5e7eb;
+  background: #ffffff;
+  color: #000000;
+  cursor: pointer;
+  text-align: left;
+}
+
+.liquor-size-card:hover {
+  background: #f9fafb;
+  border-color: #111827;
+}
+
+.liquor-size-card-active {
+  border-color: #000000 !important;
+  background: #fef3c7 !important;
+}
+
+.liquor-size-image {
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.liquor-size-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.liquor-size-image span {
+  color: #6b7280 !important;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.liquor-size-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.liquor-size-info strong,
+.liquor-size-info span,
+.liquor-size-info b {
+  color: #000000 !important;
+}
+
+.liquor-size-info strong {
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.liquor-size-info span {
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.liquor-size-info b {
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+/* =======================
+   BOTELLAS
+======================= */
+
+.liquor-bottle-section {
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.liquor-bottle-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 6px 2px 10px;
+}
+
+.liquor-bottle-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.liquor-bottle-row::-webkit-scrollbar-thumb {
+  background: #111827;
+  border-radius: 999px;
+}
+
+.liquor-bottle-chip {
+  flex: 0 0 150px;
+  padding: 8px;
+  border-radius: 14px;
+  border: 2px solid #e5e7eb;
+  background: #ffffff;
+  color: #000000;
+  cursor: pointer;
+  text-align: left;
+}
+
+.liquor-bottle-chip:hover {
+  background: #f9fafb;
+  border-color: #111827;
+}
+
+.liquor-bottle-chip-active {
+  border-color: #000000 !important;
+  background: #dcfce7 !important;
+}
+
+.liquor-bottle-chip-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.liquor-bottle-chip-disabled:hover {
+  background: #ffffff;
+  border-color: #e5e7eb;
+}
+
+.liquor-bottle-image {
+  width: 100%;
+  height: 72px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.liquor-bottle-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.liquor-bottle-image span {
+  color: #6b7280 !important;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.liquor-bottle-info {
+  margin-top: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.liquor-bottle-info strong {
+  color: #000000 !important;
+  font-size: 0.82rem;
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.liquor-bottle-info span,
+.liquor-bottle-info small {
+  color: #374151 !important;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+/* =======================
+   RESUMEN
+======================= */
+/* ============================================================
+   POS — AJUSTES MODAL LICOR SIN RESUMEN
+============================================================ */
+
+.liquor-bottle-row-expanded {
+  padding-bottom: 16px;
+}
+
+.liquor-bottle-section {
+  margin-bottom: 14px;
+}
+
+.liquor-bottle-chip {
+  flex: 0 0 165px;
+}
+
+.liquor-bottle-info small {
+  color: #166534 !important;
+  font-weight: 900;
+}
+
+@media (max-width: 768px) {
+  .liquor-bottle-chip {
+    flex-basis: 145px;
+  }
+}
+
+@media (max-width: 480px) {
+  .liquor-bottle-chip {
+    flex-basis: 132px;
+  }
+}
+
+/* ============================================================
+   POS — CARRITO COMPACTO
+============================================================ */
+
+.cart-items-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cart-line-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto 28px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+}
+
+.cart-line-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cart-line-name {
+  color: #111827;
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cart-line-extra {
+  color: #6b7280;
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cart-line-quantity {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #111827;
+  font-size: 0.78rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.cart-line-quantity button {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #111827;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cart-line-quantity button:hover {
+  background: #e5e7eb;
+}
+
+.cart-line-price {
+  color: #111827;
+  font-size: 0.82rem;
+  font-weight: 900;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.cart-line-remove {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  border: none;
+  background: #fee2e2;
+  color: #991b1b;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cart-line-remove:hover {
+  background: #fecaca;
+}
+
+/* ============================================================
+   POS — MÉTODOS DE PAGO CON ICONOS FORMALES
+============================================================ */
+
+.payment-method-button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: left;
+}
+
+.payment-method-icon {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.payment-method-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.payment-method-icon-cash {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.payment-method-icon-card {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.payment-method-icon-transfer {
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.payment-method-icon-courtesy {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.payment-method-icon-credit {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.payment-method-icon-default {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.payment-method-label {
+  color: inherit;
+  font-weight: 900;
+}
+.liquor-bottle-chip-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.7);
+}
+
+.liquor-bottle-chip-disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.liquor-bottle-unavailable {
+  color: #991b1b;
+  font-weight: 900;
+}
+/* ============================================================
+   RESPONSIVO
+============================================================ */
+
+@media (max-width: 900px) {
+  .table-note-flag {
+    right: -30px;
+    width: 36px;
+    min-height: 46px;
+    border-radius: 0 12px 12px 0;
+  }
+
+  .table-note-flag-count {
+    width: 19px;
+    height: 19px;
+    font-size: 0.68rem;
+  }
+}
+
+.table-note-flag {
+  position: absolute;
+  top: 14px;
+  right: -38px;
+  width: 42px;
+  min-height: 52px;
+  border: none;
+  border-radius: 0 14px 14px 0;
+  background: #9ca3af;
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  z-index: 30;
+  transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.table-note-flag-count {
+  width: 21px;
+  height: 21px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.table-note-flag-active {
+  background: #047857;
+}
+
+.table-note-flag-has-note {
+  background: #111827;
+}
+
+.table-note-flag-empty {
+  background: #9ca3af;
+}
+
+.pool-table-card-note-active {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+
+.pool-table-note-summary {
+  margin-top: 8px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #065f46;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+/* ============================================================
+   RESPONSIVO
+============================================================ */
+
+@media (max-width: 900px) {
+}
+
+/* ============================================================
+   MESAS — DISEÑO ANTERIOR CON DIBUJO + BANDERILLA DE NOTA
+   ============================================================ */
+
+/*
+   Mantiene el diseño anterior de mesa dibujada:
+   .pool-table-wrapper + .pool-table-shape + .pool-pocket.
+   Solo agrega la banderilla lateral como botón de nota.
+*/
+
+.pos-layout {
+  align-items: stretch !important;
+  overflow: visible !important;
+}
+
+.tables-sidebar {
+  position: static !important;
+  top: auto !important;
+  align-self: stretch !important;
+  width: 260px !important;
+  min-width: 260px !important;
+  height: auto !important;
+  min-height: 100% !important;
+  max-height: none !important;
+  overflow: visible !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: #1f1f1f !important;
+  color: #ffffff !important;
+  padding: 16px !important;
+  border-right: 1px solid #2f2f2f !important;
+}
+
+.tables-sidebar,
+.tables-sidebar-content,
+.pool-table-section,
+.tables-list {
+  overflow: visible !important;
+}
+
+.tables-sidebar-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tables-sidebar-header h2 {
+  margin: 0;
+  color: #ffffff !important;
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.tables-sidebar-header p {
+  margin: 4px 0 0;
+  color: #d1d5db !important;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.tables-refresh-button {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #ffffff !important;
+  color: #111827 !important;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.tables-sidebar-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.pool-table-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pool-table-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pool-table-section-header h2 {
+  margin: 0;
+  color: #ffffff !important;
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.pool-table-section-header span {
+  min-width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #111827 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+/* Lista anterior, con espacio a la derecha para que la bandera sobresalga */
+.tables-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  padding-right: 34px !important;
+}
+
+/* Tarjeta anterior de mesa */
+.pool-table-wrapper {
+  position: relative !important;
+  overflow: visible !important;
+  background: #2b2b2b !important;
+  border: 1px solid #3a3a3a !important;
+  border-radius: 18px !important;
+  padding: 12px !important;
+  color: #ffffff !important;
+}
+
+.pool-table-wrapper * {
+  box-sizing: border-box;
+}
+
+.pool-table-card-note-active {
+  outline: 2px solid #10b981 !important;
+  outline-offset: 2px !important;
+}
+
+.pool-table-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  margin-bottom: 10px !important;
+}
+
+.pool-table-header strong {
+  color: #ffffff !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+}
+
+.pool-table-header span {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+}
+
+.pool-table-available .pool-table-header span {
+  background: #dcfce7 !important;
+  color: #166534 !important;
+}
+
+.pool-table-occupied .pool-table-header span {
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+}
+
+/* Dibujo anterior de mesa */
+.pool-table-shape {
+  position: relative !important;
+  height: 86px !important;
+  border-radius: 18px !important;
+  background: #146c43 !important;
+  border: 8px solid #7c4a24 !important;
+  margin-bottom: 10px !important;
+  overflow: hidden !important;
+}
+
+.pool-table-shape::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 8px !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+}
+
+.pool-pocket {
+  position: absolute !important;
+  width: 14px !important;
+  height: 14px !important;
+  background: #050505 !important;
+  border-radius: 50% !important;
+  z-index: 2 !important;
+}
+
+.pocket-top-left {
+  top: -3px !important;
+  left: -3px !important;
+}
+
+.pocket-top-center {
+  top: -5px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+
+.pocket-top-right {
+  top: -3px !important;
+  right: -3px !important;
+}
+
+.pocket-bottom-left {
+  bottom: -3px !important;
+  left: -3px !important;
+}
+
+.pocket-bottom-center {
+  bottom: -5px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+
+.pocket-bottom-right {
+  bottom: -3px !important;
+  right: -3px !important;
+}
+
+.carambola-table-shape {
+  background: #0f5c39 !important;
+}
+
+.carambola-table-shape::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 12px !important;
+  border-radius: 10px !important;
+  border: 1px dashed rgba(255, 255, 255, 0.22) !important;
+}
+
+.carambola-table-shape .pool-pocket {
+  display: none !important;
+}
+
+/* Contador sobre el dibujo de la mesa */
+.pool-table-timer {
+  position: absolute !important;
+  inset: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 1.15rem !important;
+  font-weight: 900 !important;
+  text-align: center !important;
+  letter-spacing: 0.4px !important;
+  color: #ffffff !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+  z-index: 3 !important;
+}
+
+.pool-table-charge {
+  color: #ffffff !important;
+  font-size: 0.9rem !important;
+  font-weight: 800 !important;
+  text-align: center !important;
+  margin: 6px 0 !important;
+}
+
+/* Resumen de nota dentro de la tarjeta */
+.pool-table-note-summary {
+  margin-top: 8px !important;
+  padding: 7px 9px !important;
+  border-radius: 9px !important;
+  background: #ecfdf5 !important;
+  border: 1px solid #bbf7d0 !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  color: #065f46 !important;
+  font-size: 0.78rem !important;
+  font-weight: 800 !important;
+}
+
+.pool-table-note-summary span,
+.pool-table-note-summary strong {
+  color: #047857 !important;
+}
+
+/* Botones anteriores */
+.table-action-buttons {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 8px !important;
+  margin-top: 10px !important;
+}
+
+.table-start-button,
+.table-stop-button,
+.table-charge-button {
+  border: none !important;
+  border-radius: 12px !important;
+  padding: 9px 10px !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+}
+
+.table-start-button {
+  grid-column: 1 / -1 !important;
+  background: #dcfce7 !important;
+  color: #166534 !important;
+}
+
+.table-stop-button {
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+}
+
+.table-charge-button {
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+}
+
+.table-charge-button:disabled {
+  opacity: 0.5 !important;
+}
+
+/* Banderilla lateral: solo botón visual de nota */
+.table-note-flag {
+  position: absolute !important;
+  top: 14px !important;
+  right: -34px !important;
+  width: 38px !important;
+  min-height: 52px !important;
+  border: none !important;
+  border-radius: 0 14px 14px 0 !important;
+  background: #9ca3af !important;
+  color: #ffffff !important;
+  cursor: pointer !important;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  z-index: 60 !important;
+  transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease !important;
+}
+
+.table-note-flag:hover {
+  transform: translateX(4px) !important;
+}
+
+.table-note-flag-icon {
+  color: #ffffff !important;
+  font-size: 1rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+.table-note-flag-count {
+  width: 21px !important;
+  height: 21px !important;
+  border-radius: 999px !important;
+  background: #f59e0b !important;
+  color: #111827 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.72rem !important;
+  font-weight: 900 !important;
+}
+
+.table-note-flag-active {
+  background: #047857 !important;
+}
+
+.table-note-flag-has-note {
+  background: #111827 !important;
+}
+
+.table-note-flag-empty {
+  background: #9ca3af !important;
+}
+
+.table-note-panel {
+  border: 2px solid #10b981 !important;
+}
+
+.table-note-panel .bar-note-panel-header {
+  background: #ecfdf5 !important;
+}
+
+.table-note-panel .bar-note-panel-header h2 {
+  color: #065f46 !important;
+}
+
+.table-note-panel .bar-note-panel-header p {
+  margin: 4px 0 0 !important;
+  color: #047857 !important;
+  font-size: 0.82rem !important;
+  font-weight: 800 !important;
+}
+
+.tables-loading-text,
+.tables-empty-text {
+  color: #ffffff !important;
+  font-weight: 800 !important;
+}
+
+@media (max-width: 1200px) {
+  .pos-layout {
+    grid-template-columns: 240px minmax(0, 1fr) !important;
+  }
+
+  .tables-sidebar {
+    width: 240px !important;
+    min-width: 240px !important;
+  }
+
+  .cart-sidebar {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+  .pos-layout {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .tables-sidebar {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: auto !important;
+  }
+
+  .tables-list {
+    padding-right: 28px !important;
+  }
+
+  .table-note-flag {
+    right: -28px !important;
+    width: 34px !important;
+    min-height: 46px !important;
   }
 }

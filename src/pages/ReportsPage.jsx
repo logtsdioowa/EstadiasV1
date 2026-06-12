@@ -3,17 +3,16 @@ import api from "../services/api";
 
 function ReportsPage() {
   const [summary, setSummary] = useState(null);
-  const [dailyReport, setDailyReport] = useState([]);
-  const [weeklyReport, setWeeklyReport] = useState([]);
-  const [categoryReport, setCategoryReport] = useState([]);
   const [productReport, setProductReport] = useState([]);
+  const [productReportTotal, setProductReportTotal] = useState(0);
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  const [activeReport, setActiveReport] = useState("daily");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [courtesyReportTotal, setCourtesyReportTotal] = useState(0);
+const [creditReportTotal, setCreditReportTotal] = useState(0);
 
   useEffect(() => {
     setTodayFilter();
@@ -85,70 +84,189 @@ function ReportsPage() {
   const buildQueryString = () => {
     const params = new URLSearchParams();
 
-    if (startDate) params.append("startDate", startDate);
-    if (endDate) params.append("endDate", endDate);
+    if (startDate) {
+      params.append("startDate", startDate);
+    }
+
+    if (endDate) {
+      params.append("endDate", endDate);
+    }
 
     return params.toString();
   };
 
-  const loadReports = async () => {
-    if (!startDate || !endDate) {
-      showToast("Selecciona fecha inicial y fecha final.", "warning");
-      return;
+  const normalizeReportDate = (dateValue) => {
+    if (!dateValue) return "";
+
+    const dateText = String(dateValue);
+
+    if (dateText.includes("T")) {
+      return dateText.split("T")[0];
     }
 
-    if (new Date(startDate) > new Date(endDate)) {
-      showToast("La fecha inicial no puede ser mayor que la fecha final.", "warning");
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      const query = buildQueryString();
-
-      const [
-        summaryResponse,
-        dailyResponse,
-        weeklyResponse,
-        categoryResponse,
-        productResponse,
-      ] = await Promise.all([
-        api.get(`/Sales/Reports/Summary?${query}`),
-        api.get(`/Sales/Reports/Daily?${query}`),
-        api.get(`/Sales/Reports/Weekly?${query}`),
-        api.get(`/Sales/Reports/ByCategory?${query}`),
-        api.get(`/Sales/Reports/ByProduct?${query}`),
-      ]);
-
-      setSummary(summaryResponse.data);
-      setDailyReport(dailyResponse.data || []);
-      setWeeklyReport(weeklyResponse.data || []);
-      setCategoryReport(categoryResponse.data || []);
-      setProductReport(productResponse.data || []);
-    } catch (error) {
-      console.error("Error al cargar reportes:", error);
-      showToast("No se pudieron cargar los reportes.", "error");
-    } finally {
-      setLoading(false);
-    }
+    return dateText;
   };
 
-  const getProductTypeLabel = (productType) => {
-    const labels = {
-      BOTTLED_DRINK: "Bebida embotellada",
-      PREPARED_DRINK: "Bebida preparada con cerveza",
-      LIQUOR_DRINK: "Bebida preparada con licor",
-      SHOT: "Shot",
-      BEER_BUCKET: "Cubeta de cerveza",
-      PACK: "Paquete",
-      CIGARETTE_UNIT: "Cigarro suelto",
-      SERVICE: "Servicio",
-      BOTTLE: "Botella",
-      INVENTORY_BASE: "Inventario base",
-    };
+  const formatDateForDisplay = (dateValue) => {
+    if (!dateValue) return "";
 
-    return labels[productType] || productType || "N/A";
+    const cleanDate = normalizeReportDate(dateValue);
+    const [year, month, day] = cleanDate.split("-");
+
+    if (!year || !month || !day) return dateValue;
+
+    return `${day}/${month}/${year.slice(-2)}`;
+  };
+
+  const formatDateForApi = (displayValue) => {
+    if (!displayValue) return "";
+
+    const cleanValue = displayValue.trim();
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cleanValue)) {
+      return cleanValue;
+    }
+
+    const [day, month, year] = cleanValue.split("/");
+
+    if (!day || !month || !year) {
+      return cleanValue;
+    }
+
+    const normalizedDay = day.padStart(2, "0");
+    const normalizedMonth = month.padStart(2, "0");
+    const fullYear = year.length === 2 ? `20${year}` : year;
+
+    return `${fullYear}-${normalizedMonth}-${normalizedDay}`;
+  };
+
+  const isValidApiDate = (dateValue) => {
+    return /^\d{4}-\d{2}-\d{2}$/.test(dateValue);
+  };
+const loadReports = async () => {
+  if (!startDate || !endDate) {
+    showToast("Selecciona fecha inicial y fecha final.", "warning");
+    return;
+  }
+
+  if (!isValidApiDate(startDate) || !isValidApiDate(endDate)) {
+    showToast("Usa el formato dd/mm/aa en ambas fechas.", "warning");
+    return;
+  }
+
+  if (new Date(startDate) > new Date(endDate)) {
+    showToast(
+      "La fecha inicial no puede ser mayor que la fecha final.",
+      "warning"
+    );
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    const query = buildQueryString();
+
+    const productResponse = await api.get(`/Sales/Reports/ByProduct?${query}`);
+
+    const productData = productResponse.data || {};
+
+    if (Array.isArray(productData)) {
+      setProductReport(productData);
+
+      const paidTotal = productData.reduce(
+        (sum, item) => sum + Number(item.total || 0),
+        0
+      );
+
+      const courtesyTotal = productData.reduce(
+        (sum, item) => sum + Number(item.courtesyTotal || 0),
+        0
+      );
+
+      const creditTotal = productData.reduce(
+        (sum, item) => sum + Number(item.creditTotal || 0),
+        0
+      );
+
+      setProductReportTotal(paidTotal);
+      setCourtesyReportTotal(courtesyTotal);
+      setCreditReportTotal(creditTotal);
+
+      setSummary({
+        tickets: 0,
+        total: paidTotal,
+        courtesyTotal,
+        creditTotal,
+        courtesyTickets: 0,
+        creditTickets: 0,
+      });
+    } else {
+      const items = productData.items || [];
+
+      setProductReport(items);
+      setProductReportTotal(productData.total || 0);
+      setCourtesyReportTotal(productData.courtesyTotal || 0);
+      setCreditReportTotal(productData.creditTotal || 0);
+
+      const courtesyItems = items.filter(
+        (item) =>
+          Number(item.courtesyQuantity || 0) > 0 ||
+          Number(item.courtesyTotal || 0) > 0
+      );
+
+      const creditItems = items.filter(
+        (item) =>
+          Number(item.creditQuantity || 0) > 0 ||
+          Number(item.creditTotal || 0) > 0
+      );
+
+      setSummary({
+        tickets: items.length,
+        total: productData.total || 0,
+        courtesyTotal: productData.courtesyTotal || 0,
+        creditTotal: productData.creditTotal || 0,
+        courtesyTickets: courtesyItems.length,
+        creditTickets: creditItems.length,
+      });
+    }
+  } catch (error) {
+    console.error("Error al cargar reportes:", error);
+    showToast("No se pudieron cargar los reportes.", "error");
+  } finally {
+    setLoading(false);
+  }
+};
+  
+
+  const handleStartDateChange = (value) => {
+    const apiDate = formatDateForApi(value);
+    setStartDate(apiDate);
+  };
+
+  const handleEndDateChange = (value) => {
+    const apiDate = formatDateForApi(value);
+    setEndDate(apiDate);
+  };
+
+  const groupProductReportByCategory = () => {
+    const grouped = {};
+
+    productReport.forEach((item) => {
+      const category = item.category || "Sin categoría";
+
+      if (!grouped[category]) {
+        grouped[category] = [];
+      }
+
+      grouped[category].push(item);
+    });
+
+    return Object.entries(grouped).map(([category, items]) => ({
+      category,
+      items,
+      total: items.reduce((sum, item) => sum + Number(item.total || 0), 0),
+    }));
   };
 
   return (
@@ -164,19 +282,25 @@ function ReportsPage() {
       <div className="reports-filters">
         <div>
           <label>Fecha inicial</label>
+
           <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            type="text"
+            value={formatDateForDisplay(startDate)}
+            onChange={(e) => handleStartDateChange(e.target.value)}
+            placeholder="dd/mm/aa"
+            maxLength={8}
           />
         </div>
 
         <div>
           <label>Fecha final</label>
+
           <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            type="text"
+            value={formatDateForDisplay(endDate)}
+            onChange={(e) => handleEndDateChange(e.target.value)}
+            placeholder="dd/mm/aa"
+            maxLength={8}
           />
         </div>
 
@@ -200,215 +324,114 @@ function ReportsPage() {
       </div>
 
       {loading && <p>Cargando reportes...</p>}
+{summary && (
+  <div className="reports-summary">
+    <div className="report-summary-card">
+      <strong>Ventas</strong>
+      <span>{formatNumber(summary.tickets)}</span>
+    </div>
 
-      {summary && (
-        <div className="reports-summary">
-          <div className="report-summary-card">
-            <strong>Ventas</strong>
-            <span>{formatNumber(summary.tickets)}</span>
-          </div>
+    <div className="report-summary-card">
+      <strong>Total cobrado</strong>
+      <span>{formatCurrency(summary.total)}</span>
+    </div>
 
-          <div className="report-summary-card">
-            <strong>Subtotal</strong>
-            <span>{formatCurrency(summary.subtotal)}</span>
-          </div>
+    <div className="report-summary-card">
+      <strong>Cortesías</strong>
+      <span className="courtesy-red">
+        {formatNumber(summary.courtesyTickets || 0)} venta(s)
+      </span>
+      <small>{formatCurrency(summary.courtesyTotal || 0)} no cobrado</small>
+    </div>
 
-          <div className="report-summary-card">
-            <strong>Total vendido</strong>
-            <span>{formatCurrency(summary.total)}</span>
-          </div>
+    <div className="report-summary-card">
+      <strong>Crédito</strong>
+      <span className="credit-orange">
+        {formatNumber(summary.creditTickets || 0)} pendiente(s)
+      </span>
+      <small>{formatCurrency(summary.creditTotal || 0)} pendiente</small>
+    </div>
+  </div>
+)}
+      
 
-        
+      <section className="report-section">
+        <h2>Ventas por producto / concepto</h2>
+
+        <div className="report-table-wrapper">
+          <table className="report-table">
+            <thead>
+              <tr>
+                <th>Producto / Concepto</th>
+                <th>Cantidad / Tiempo</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {productReport.length === 0 && (
+                <tr>
+                  <td colSpan="3">
+                    No hay ventas en el periodo seleccionado.
+                  </td>
+                </tr>
+              )}
+
+              {groupProductReportByCategory().map((group) => (
+                  <>
+                    <tr
+                      key={`category-${group.category}`}
+                      className="report-category-row"
+                    >
+                    <td colSpan="2">
+                      <strong>{group.category}</strong>
+                    </td>
+
+                    <td>
+                      <strong>{formatCurrency(group.total)}</strong>
+                    </td>
+                  </tr>
+
+                  {group.items.map((item, index) => (
+                    <tr
+                      key={`${group.category}-${item.productId}-${item.productName}-${index}`}
+                    >
+                      <td>{item.productName}</td>
+                      <td>
+  <span>{item.quantityLabel ?? item.quantity}</span>
+
+  {Number(item.courtesyQuantity || 0) > 0 && (
+    <span className="courtesy-count">
+      {" "}
+      + {formatNumber(item.courtesyQuantity)} cortesía(s)
+    </span>
+  )}
+
+  {Number(item.creditQuantity || 0) > 0 && (
+    <span className="credit-count">
+      {" "}
+      + {formatNumber(item.creditQuantity)} crédito
+    </span>
+  )}
+</td>
+                      <td>{formatCurrency(item.total)}</td>
+                    </tr>
+                  ))}
+                </>
+              ))}
+            </tbody>
+
+            {productReport.length > 0 && (
+              <tfoot>
+                <tr>
+                  <td colSpan="2">Total general</td>
+                  <td>{formatCurrency(productReportTotal)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
         </div>
-      )}
-
-      <div className="report-tabs">
-        <button
-          type="button"
-          className={activeReport === "daily" ? "active-report-tab" : ""}
-          onClick={() => setActiveReport("daily")}
-        >
-          Por día
-        </button>
-
-        <button
-          type="button"
-          className={activeReport === "weekly" ? "active-report-tab" : ""}
-          onClick={() => setActiveReport("weekly")}
-        >
-          Por semana
-        </button>
-
-        <button
-          type="button"
-          className={activeReport === "category" ? "active-report-tab" : ""}
-          onClick={() => setActiveReport("category")}
-        >
-          Por categoría
-        </button>
-
-        <button
-          type="button"
-          className={activeReport === "product" ? "active-report-tab" : ""}
-          onClick={() => setActiveReport("product")}
-        >
-          Por producto
-        </button>
-      </div>
-
-      {activeReport === "daily" && (
-        <section className="report-section">
-          <h2>Ventas por día</h2>
-
-          <div className="report-table-wrapper">
-            <table className="report-table">
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Ventas</th>
-                  <th>Subtotal</th>
-                  <th>Total</th>
-                  <th>Venta promedio</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {dailyReport.map((item) => (
-                  <tr key={item.date}>
-                    <td>{item.date}</td>
-                    <td>{formatNumber(item.tickets)}</td>
-                    <td>{formatCurrency(item.subtotal)}</td>
-                    <td>{formatCurrency(item.total)}</td>
-                    <td>{formatCurrency(item.averageTicket)}</td>
-                  </tr>
-                ))}
-
-                {dailyReport.length === 0 && (
-                  <tr>
-                    <td colSpan="5">No hay ventas en el periodo seleccionado.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {activeReport === "weekly" && (
-        <section className="report-section">
-          <h2>Ventas por semana</h2>
-
-          <div className="report-table-wrapper">
-            <table className="report-table">
-              <thead>
-                <tr>
-                  <th>Inicio</th>
-                  <th>Fin</th>
-                  <th>Venta</th>
-                  <th>Subtotal</th>
-                  <th>Total</th>
-                  <th>Venta promedio</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {weeklyReport.map((item) => (
-                  <tr key={item.weekStart}>
-                    <td>{item.weekStart}</td>
-                    <td>{item.weekEnd}</td>
-                    <td>{formatNumber(item.tickets)}</td>
-                    <td>{formatCurrency(item.subtotal)}</td>
-                    <td>{formatCurrency(item.total)}</td>
-                    <td>{formatCurrency(item.averageTicket)}</td>
-                  </tr>
-                ))}
-
-                {weeklyReport.length === 0 && (
-                  <tr>
-                    <td colSpan="6">No hay ventas en el periodo seleccionado.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {activeReport === "category" && (
-        <section className="report-section">
-          <h2>Ventas por categoría</h2>
-
-          <div className="report-table-wrapper">
-            <table className="report-table">
-              <thead>
-                <tr>
-                  <th>Categoría</th>
-                  <th>Cantidad vendida</th>
-                  <th>Total</th>
-                  <th>Productos distintos</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {categoryReport.map((item) => (
-                  <tr key={item.category}>
-                    <td>{item.category}</td>
-                    <td>{formatNumber(item.quantity)}</td>
-                    <td>{formatCurrency(item.total)}</td>
-                    <td>{formatNumber(item.products)}</td>
-                  </tr>
-                ))}
-
-                {categoryReport.length === 0 && (
-                  <tr>
-                    <td colSpan="4">No hay ventas en el periodo seleccionado.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {activeReport === "product" && (
-        <section className="report-section">
-          <h2>Ventas por producto</h2>
-
-          <div className="report-table-wrapper">
-            <table className="report-table">
-              <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th>Categoría</th>
-                  <th>Tipo</th>
-                  <th>Cantidad</th>
-                  <th>Total</th>
-                  <th>Precio promedio</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {productReport.map((item) => (
-                  <tr key={`${item.productId}-${item.productName}`}>
-                    <td>{item.productName}</td>
-                    <td>{item.category}</td>
-                    <td>{getProductTypeLabel(item.productType)}</td>
-                    <td>{formatNumber(item.quantity)}</td>
-                    <td>{formatCurrency(item.total)}</td>
-                    <td>{formatCurrency(item.averageUnitPrice)}</td>
-                  </tr>
-                ))}
-
-                {productReport.length === 0 && (
-                  <tr>
-                    <td colSpan="6">No hay ventas en el periodo seleccionado.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+      </section>
     </div>
   );
 }
