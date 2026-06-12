@@ -20,6 +20,8 @@ function PosPage() {
   const [beerModal, setBeerModal] = useState({
     isOpen: false,
     product: null,
+    sizes: [],
+    selectedSize: null,
   });
 
   const [liquorModal, setLiquorModal] = useState({
@@ -1047,12 +1049,36 @@ function PosPage() {
     setCashCuts([]);
   };
 
-  const openBeerModal = (product) => {
-    setBeerModal({ isOpen: true, product });
+  const openBeerModal = async (product) => {
+    try {
+      const sizes = await loadDrinkSizesForProduct(product);
+      const selectedSize = sizes.length > 0 ? sizes[0] : null;
+
+      setBeerModal({
+        isOpen: true,
+        product,
+        sizes,
+        selectedSize,
+      });
+    } catch (error) {
+      console.error("Error al cargar tamaños de bebida con cerveza:", error);
+
+      setBeerModal({
+        isOpen: true,
+        product,
+        sizes: [],
+        selectedSize: null,
+      });
+    }
   };
 
   const closeBeerModal = () => {
-    setBeerModal({ isOpen: false, product: null });
+    setBeerModal({
+      isOpen: false,
+      product: null,
+      sizes: [],
+      selectedSize: null,
+    });
   };
 
   const getRequiredBeerQuantity = (product) => {
@@ -1118,15 +1144,21 @@ function PosPage() {
     }
 
     try {
+      const selectedSize = beerModal.selectedSize;
+      const unitPrice = Number(selectedSize?.price ?? product.price ?? 0);
+      const drinkSizeName = selectedSize?.sizeName ?? null;
+
       const item = {
         productId: product.productId,
-        productDrinkSizeId: null,
-        drinkSizeName: null,
-        ouncesUsed: null,
-        name: `${product.name} - ${selectedBeer.name}`,
+        productDrinkSizeId: selectedSize?.productDrinkSizeId ?? null,
+        drinkSizeName,
+        ouncesUsed: selectedSize?.ouncesUsed ?? null,
+        name: drinkSizeName
+          ? `${product.name} - ${drinkSizeName} - ${selectedBeer.name}`
+          : `${product.name} - ${selectedBeer.name}`,
         quantity: 1,
-        unitPrice: Number(product.price || 0),
-        subtotal: Number(product.price || 0),
+        unitPrice,
+        subtotal: unitPrice,
         productType: product.productType,
         selectedBeerProductId: selectedBeer.productId,
         selectedBottleProductId: null,
@@ -1305,7 +1337,7 @@ function PosPage() {
 
   const addToCart = async (product) => {
     if (product.requiresBeerSelection) {
-      openBeerModal(product);
+      await openBeerModal(product);
       return;
     }
 
@@ -1547,9 +1579,6 @@ function PosPage() {
   };
 
   const validateAndCleanCart = async () => {
-    await loadProducts();
-    await loadBeers();
-    await loadBottleBases();
     return await loadCart();
   };
 
@@ -1638,9 +1667,6 @@ function PosPage() {
       await api.post("/Sales", payload);
       showToast("Venta registrada correctamente.", "success");
       await clearCart();
-      await loadProducts();
-      await loadBeers();
-      await loadBottleBases();
       await loadCashBox();
       setCashReceived("");
       setPaymentReference("");
@@ -1916,12 +1942,12 @@ function PosPage() {
                   <h2>
                     {beerModal.product?.productType === "BEER_BUCKET"
                       ? "Seleccionar cerveza para cubeta"
-                      : "Seleccionar cerveza"}
+                      : "Seleccionar tamaño y cerveza"}
                   </h2>
                   <p>
                     {beerModal.product?.productType === "BEER_BUCKET"
                       ? "La cubeta descontará 10 unidades de la cerveza seleccionada."
-                      : "La bebida descontará 1 unidad de la cerveza seleccionada."}
+                      : "Selecciona primero el tamaño de la bebida y después la cerveza."}
                   </p>
                 </div>
 
@@ -1930,38 +1956,112 @@ function PosPage() {
                 </button>
               </div>
 
-              {getBeersForProduct(beerModal.product).length === 0 ? (
-                <p>No hay cervezas disponibles para este precio.</p>
-              ) : (
-                <div className="beer-card-grid">
-                  {getBeersForProduct(beerModal.product).map((beer) => {
-                    const requiredQuantity = getRequiredBeerQuantity(beerModal.product);
-                    const hasEnoughStock = Number(beer.stock || 0) >= requiredQuantity;
-                    const availableSales = Math.floor(Number(beer.stock || 0) / requiredQuantity);
+              {beerModal.sizes.length > 0 && (
+                <div className="liquor-modal-section">
+                  <div className="liquor-section-title">
+                    <strong>Tamaños</strong>
+                    <span>Elige la presentación que se cobrará</span>
+                  </div>
 
-                    return (
-                      <button
-                        type="button"
-                        className={`beer-select-card ${!hasEnoughStock ? "beer-select-card-disabled" : ""}`}
-                        key={beer.productId}
-                        disabled={!hasEnoughStock}
-                        onClick={() => addPreparedDrinkToCart(beer)}
-                      >
-                        <div className="beer-select-image">
-                          {beer.imageUrl ? <img src={beer.imageUrl} alt={beer.name} /> : <span>Sin imagen</span>}
-                        </div>
+                  <div className="liquor-size-grid">
+                    {beerModal.sizes.map((size, index) => {
+                      const sizeKey =
+                        size.productDrinkSizeId ||
+                        `${size.productId}-${size.sizeName}-${index}`;
+                      const isSelected =
+                        Number(beerModal.selectedSize?.productDrinkSizeId) ===
+                          Number(size.productDrinkSizeId) ||
+                        (!beerModal.selectedSize?.productDrinkSizeId &&
+                          beerModal.selectedSize?.sizeName === size.sizeName);
 
-                        <div className="beer-select-info">
-                          <strong>{beer.name}</strong>
-                          <span>Stock: {Number(beer.stock || 0)}</span>
-                          <span>Disponible para: {availableSales} venta(s)</span>
-                          {!hasEnoughStock && <em>Stock insuficiente</em>}
-                        </div>
-                      </button>
-                    );
-                  })}
+                      return (
+                        <button
+                          type="button"
+                          key={sizeKey}
+                          className={`liquor-size-card ${
+                            isSelected ? "liquor-size-card-active" : ""
+                          }`}
+                          onClick={() => {
+                            setBeerModal((prev) => ({
+                              ...prev,
+                              selectedSize: size,
+                            }));
+                          }}
+                        >
+                          <div className="liquor-size-image">
+                            {size.imageUrl ? (
+                              <img src={size.imageUrl} alt={size.sizeName} />
+                            ) : (
+                              <span>Sin imagen</span>
+                            )}
+                          </div>
+
+                          <div className="liquor-size-info">
+                            <strong>{size.sizeName}</strong>
+                            {Number(size.ouncesUsed || 0) > 0 && (
+                              <span>{Number(size.ouncesUsed || 0)} oz</span>
+                            )}
+                            <b>{formatCurrency(size.price)}</b>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
+
+              <div className="liquor-modal-section">
+                <div className="liquor-section-title">
+                  <strong>Cervezas disponibles</strong>
+                  <span>
+                    {beerModal.product?.productType === "BEER_BUCKET"
+                      ? "Solo se muestran cervezas compatibles con el precio de la cubeta."
+                      : "Selecciona la cerveza que se descontará del inventario."}
+                  </span>
+                </div>
+
+                {getBeersForProduct(beerModal.product).length === 0 ? (
+                  <p>No hay cervezas disponibles para este precio.</p>
+                ) : (
+                  <div className="beer-card-grid">
+                    {getBeersForProduct(beerModal.product).map((beer) => {
+                      const requiredQuantity = getRequiredBeerQuantity(beerModal.product);
+                      const hasEnoughStock =
+                        Number(beer.stock || 0) >= requiredQuantity;
+                      const availableSales = Math.floor(
+                        Number(beer.stock || 0) / requiredQuantity
+                      );
+
+                      return (
+                        <button
+                          type="button"
+                          className={`beer-select-card ${
+                            !hasEnoughStock ? "beer-select-card-disabled" : ""
+                          }`}
+                          key={beer.productId}
+                          disabled={!hasEnoughStock}
+                          onClick={() => addPreparedDrinkToCart(beer)}
+                        >
+                          <div className="beer-select-image">
+                            {beer.imageUrl ? (
+                              <img src={beer.imageUrl} alt={beer.name} />
+                            ) : (
+                              <span>Sin imagen</span>
+                            )}
+                          </div>
+
+                          <div className="beer-select-info">
+                            <strong>{beer.name}</strong>
+                            <span>Stock: {Number(beer.stock || 0)}</span>
+                            <span>Disponible para: {availableSales} venta(s)</span>
+                            {!hasEnoughStock && <em>Stock insuficiente</em>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
