@@ -116,9 +116,17 @@ function TablesSidebar({
     };
   };
 
+  const roundUpToNextTen = (amount) => {
+    const value = Number(amount || 0);
+
+    if (value <= 0) return 0;
+
+    return Math.ceil(value / 10) * 10;
+  };
+
   const calculateTableFinalChargeBySeconds = (elapsedSeconds) => {
     const liveCharge = calculateTableLiveChargeBySeconds(elapsedSeconds);
-    const roundedTotal = Math.ceil(liveCharge.total / 10) * 10;
+    const roundedTotal = roundUpToNextTen(liveCharge.total);
 
     return {
       totalMinutes: liveCharge.totalMinutes,
