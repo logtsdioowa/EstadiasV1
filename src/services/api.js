@@ -1,7 +1,8 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://nuevoejido.runasp.net/api",
+  baseURL: "https://nuevoejido.runasp.net/api",
+  timeout: 15000,
 });
 
 export default api;
