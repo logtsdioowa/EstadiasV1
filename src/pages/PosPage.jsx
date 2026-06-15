@@ -65,6 +65,7 @@ function PosPage() {
   const [cashCuts, setCashCuts] = useState([]);
 
   const ML_PER_OUNCE = 29.5735;
+  const TABLE_BUCKET_PROMOS_STORAGE_KEY = "nuevoEjidoTableBucketPromos";
 
   useEffect(() => {
     document.title = "El Nuevo Ejido";
@@ -173,6 +174,108 @@ function PosPage() {
     if (text === "false" || text === "0" || text === "inactivo") return false;
 
     return defaultValue;
+  };
+
+  const readTableBucketPromos = () => {
+    try {
+      const rawPromos = localStorage.getItem(TABLE_BUCKET_PROMOS_STORAGE_KEY);
+      return rawPromos ? JSON.parse(rawPromos) : {};
+    } catch (error) {
+      console.error("Error al leer promociones de cubeta:", error);
+      return {};
+    }
+  };
+
+  const saveTableBucketPromos = (promos) => {
+    localStorage.setItem(TABLE_BUCKET_PROMOS_STORAGE_KEY, JSON.stringify(promos));
+    window.dispatchEvent(new Event("table-bucket-promo-updated"));
+  };
+
+  const isBeerBucketProduct = (product) => {
+    const name = normalizeNameForOrder(
+      product?.name ??
+        product?.Name ??
+        product?.productName ??
+        product?.ProductName ??
+        ""
+    );
+    const category = normalizeNameForOrder(product?.category ?? product?.Category ?? "");
+    const productType = String(product?.productType ?? product?.ProductType ?? "")
+      .toUpperCase()
+      .trim();
+
+    return (
+      productType === "BEER_BUCKET" ||
+      name.includes("cubeta") ||
+      (category.includes("cerveza") && name.includes("cubeta"))
+    );
+  };
+
+  const registerTableBucketPromo = (product, targetTableId = null) => {
+    if (!isBeerBucketProduct(product)) {
+      return false;
+    }
+
+    const tableId =
+      targetTableId ??
+      activeTableInfo?.tableId ??
+      activeTableTab?.tableId ??
+      activeTableTab?.TableId ??
+      null;
+
+    if (!tableId) {
+      return false;
+    }
+
+    const promos = readTableBucketPromos();
+    const promoKey = String(tableId);
+    const currentPromo = promos[promoKey] || null;
+
+    const previousGrants = Array.isArray(currentPromo?.grants)
+      ? currentPromo.grants
+      : currentPromo
+      ? [
+          {
+            createdAt: currentPromo.createdAt || new Date().toISOString(),
+            freeSeconds: Number(currentPromo.freeSeconds || 3600),
+            productId: currentPromo.productId ?? null,
+            productName: currentPromo.productName || "Cubeta de cerveza",
+          },
+        ]
+      : [];
+
+    const nextGrant = {
+      createdAt: new Date().toISOString(),
+      freeSeconds: 3600,
+      productId: product.productId ?? product.ProductId ?? null,
+      productName:
+        product.name ?? product.Name ?? product.productName ?? "Cubeta de cerveza",
+    };
+
+    const nextGrants = [...previousGrants, nextGrant];
+    const totalFreeSeconds = nextGrants.reduce(
+      (total, grant) => total + Number(grant.freeSeconds || 0),
+      0
+    );
+
+    promos[promoKey] = {
+      tableId,
+      productId: nextGrant.productId,
+      productName: nextGrant.productName,
+      createdAt: previousGrants[0]?.createdAt || nextGrant.createdAt,
+      freeSeconds: totalFreeSeconds,
+      grants: nextGrants,
+    };
+
+    saveTableBucketPromos(promos);
+
+    const promoHours = Math.floor(totalFreeSeconds / 3600);
+    showToast(
+      `Promoción aplicada: ${promoHours} hora${promoHours === 1 ? "" : "s"} gratis de mesa por cubeta.`,
+      "success"
+    );
+
+    return true;
   };
 
   const showToast = (message, type = "success") => {
@@ -1321,7 +1424,14 @@ function PosPage() {
 
   const sendItemToCurrentDestination = async (item, successMessage = "Producto agregado al carrito.") => {
     if (shouldSendProductsToTableTab) {
+      const tableId =
+        activeTableInfo?.tableId ??
+        activeTableTab?.tableId ??
+        activeTableTab?.TableId ??
+        null;
+
       await addToTableTab(item);
+      registerTableBucketPromo(item, tableId);
       return;
     }
 

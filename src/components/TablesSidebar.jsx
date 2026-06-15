@@ -11,6 +11,10 @@ function TablesSidebar({
 }) {
   const [tables, setTables] = useState([]);
   const [loadingTables, setLoadingTables] = useState(false);
+  const [tableBucketPromos, setTableBucketPromos] = useState({});
+
+  const TABLE_BUCKET_PROMOS_STORAGE_KEY = "nuevoEjidoTableBucketPromos";
+  const TABLE_BUCKET_PROMO_FREE_SECONDS = 3600;
 
   const notify = (message, type = "success") => {
     if (typeof onNotify === "function") {
@@ -18,14 +22,55 @@ function TablesSidebar({
     }
   };
 
+  const readTableBucketPromos = () => {
+    try {
+      const rawPromos = localStorage.getItem(TABLE_BUCKET_PROMOS_STORAGE_KEY);
+      return rawPromos ? JSON.parse(rawPromos) : {};
+    } catch (error) {
+      console.error("Error al leer promociones de cubeta:", error);
+      return {};
+    }
+  };
+
+  const loadTableBucketPromos = () => {
+    setTableBucketPromos(readTableBucketPromos());
+  };
+
+  const saveTableBucketPromos = (promos) => {
+    localStorage.setItem(TABLE_BUCKET_PROMOS_STORAGE_KEY, JSON.stringify(promos));
+    setTableBucketPromos(promos);
+    window.dispatchEvent(new Event("table-bucket-promo-updated"));
+  };
+
+  const removeTableBucketPromo = (tableId) => {
+    if (!tableId) return;
+
+    const promos = readTableBucketPromos();
+    delete promos[String(tableId)];
+    saveTableBucketPromos(promos);
+  };
+
   useEffect(() => {
     loadTables();
+    loadTableBucketPromos();
 
     const interval = setInterval(() => {
       loadTables(false);
     }, 1000);
 
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const handlePromoUpdate = () => loadTableBucketPromos();
+
+    window.addEventListener("table-bucket-promo-updated", handlePromoUpdate);
+    window.addEventListener("storage", handlePromoUpdate);
+
+    return () => {
+      window.removeEventListener("table-bucket-promo-updated", handlePromoUpdate);
+      window.removeEventListener("storage", handlePromoUpdate);
+    };
   }, []);
 
   const normalizeTable = (table) => {
@@ -105,8 +150,19 @@ function TablesSidebar({
     return Math.max(0, Math.floor((now - startedDate) / 1000));
   };
 
-  const calculateTableLiveChargeBySeconds = (elapsedSeconds) => {
+  const calculateTableLiveChargeBySeconds = (
+    elapsedSeconds,
+    { allowZero = false } = {}
+  ) => {
     const seconds = Math.max(0, Number(elapsedSeconds || 0));
+
+    if (allowZero && seconds <= 0) {
+      return {
+        totalMinutes: 0,
+        total: 0,
+      };
+    }
+
     const totalMinutes = Math.max(1, Math.ceil(seconds / 60));
     const rawTotal = totalMinutes * 0.85;
 
@@ -130,6 +186,162 @@ function TablesSidebar({
 
     return {
       totalMinutes: liveCharge.totalMinutes,
+      total: roundedTotal,
+    };
+  };
+
+  const getTableBucketPromo = (table) => {
+    if (!table) return null;
+
+    return tableBucketPromos[String(table.poolTableId)] || null;
+  };
+
+  const normalizePromoGrants = (promo) => {
+    if (!promo) return [];
+
+    if (Array.isArray(promo.grants) && promo.grants.length > 0) {
+      return promo.grants
+        .map((grant) => ({
+          createdAt: grant.createdAt || promo.createdAt,
+          freeSeconds: Number(grant.freeSeconds || TABLE_BUCKET_PROMO_FREE_SECONDS),
+        }))
+        .filter((grant) => grant.createdAt && grant.freeSeconds > 0);
+    }
+
+    return [
+      {
+        createdAt: promo.createdAt,
+        freeSeconds: Number(promo.freeSeconds || TABLE_BUCKET_PROMO_FREE_SECONDS),
+      },
+    ].filter((grant) => grant.createdAt && grant.freeSeconds > 0);
+  };
+
+  const getPromotionChargeData = (table, elapsedSeconds) => {
+    const promo = getTableBucketPromo(table);
+    const elapsed = Math.max(0, Number(elapsedSeconds || 0));
+
+    if (!promo || !table?.startedAt) {
+      return {
+        hasPromo: false,
+        chargeableSeconds: elapsed,
+        freeRemainingSeconds: 0,
+        discountedSeconds: 0,
+        totalFreeSeconds: 0,
+        promoCount: 0,
+        isPromoActiveNow: false,
+      };
+    }
+
+    const startedDate = new Date(table.startedAt);
+
+    if (Number.isNaN(startedDate.getTime())) {
+      return {
+        hasPromo: false,
+        chargeableSeconds: elapsed,
+        freeRemainingSeconds: 0,
+        discountedSeconds: 0,
+        totalFreeSeconds: 0,
+        promoCount: 0,
+        isPromoActiveNow: false,
+      };
+    }
+
+    const grants = normalizePromoGrants(promo)
+      .map((grant) => {
+        const grantDate = new Date(grant.createdAt);
+
+        if (Number.isNaN(grantDate.getTime())) return null;
+
+        return {
+          startSecond: Math.max(
+            0,
+            Math.floor((grantDate.getTime() - startedDate.getTime()) / 1000)
+          ),
+          freeSeconds: Number(grant.freeSeconds || TABLE_BUCKET_PROMO_FREE_SECONDS),
+        };
+      })
+      .filter((grant) => grant && grant.freeSeconds > 0)
+      .sort((a, b) => a.startSecond - b.startSecond);
+
+    if (grants.length === 0) {
+      return {
+        hasPromo: false,
+        chargeableSeconds: elapsed,
+        freeRemainingSeconds: 0,
+        discountedSeconds: 0,
+        totalFreeSeconds: 0,
+        promoCount: 0,
+        isPromoActiveNow: false,
+      };
+    }
+
+    let currentSecond = 0;
+    let availableFreeSeconds = 0;
+    let discountedSeconds = 0;
+    let chargeableSeconds = 0;
+
+    grants.forEach((grant) => {
+      const eventSecond = Math.min(Math.max(0, grant.startSecond), elapsed);
+      const segmentSeconds = Math.max(0, eventSecond - currentSecond);
+
+      if (segmentSeconds > 0) {
+        const freeUsed = Math.min(segmentSeconds, availableFreeSeconds);
+        discountedSeconds += freeUsed;
+        chargeableSeconds += segmentSeconds - freeUsed;
+        availableFreeSeconds -= freeUsed;
+        currentSecond = eventSecond;
+      }
+
+      if (grant.startSecond <= elapsed) {
+        availableFreeSeconds += grant.freeSeconds;
+      }
+    });
+
+    const finalSegmentSeconds = Math.max(0, elapsed - currentSecond);
+
+    if (finalSegmentSeconds > 0) {
+      const freeUsed = Math.min(finalSegmentSeconds, availableFreeSeconds);
+      discountedSeconds += freeUsed;
+      chargeableSeconds += finalSegmentSeconds - freeUsed;
+      availableFreeSeconds -= freeUsed;
+    }
+
+    const totalFreeSeconds = grants.reduce(
+      (total, grant) => total + Number(grant.freeSeconds || 0),
+      0
+    );
+
+    return {
+      hasPromo: true,
+      chargeableSeconds,
+      freeRemainingSeconds: availableFreeSeconds,
+      discountedSeconds,
+      totalFreeSeconds,
+      promoCount: grants.length,
+      isPromoActiveNow: availableFreeSeconds > 0,
+      promo,
+    };
+  };
+
+  const calculateTableLiveChargeWithPromotion = (table, elapsedSeconds) => {
+    const promoData = getPromotionChargeData(table, elapsedSeconds);
+    const charge = calculateTableLiveChargeBySeconds(
+      promoData.chargeableSeconds,
+      { allowZero: promoData.hasPromo }
+    );
+
+    return {
+      ...charge,
+      ...promoData,
+    };
+  };
+
+  const calculateTableFinalChargeWithPromotion = (table, elapsedSeconds) => {
+    const liveCharge = calculateTableLiveChargeWithPromotion(table, elapsedSeconds);
+    const roundedTotal = roundUpToNextTen(liveCharge.total);
+
+    return {
+      ...liveCharge,
       total: roundedTotal,
     };
   };
@@ -209,6 +421,7 @@ function TablesSidebar({
   const cancelTable = async (table) => {
     try {
       await api.post(`/PoolTables/${table.poolTableId}/Cancel`);
+      removeTableBucketPromo(table.poolTableId);
       await loadTables(false);
       notify(`${getTableName(table)} cancelada.`, "success");
     } catch (error) {
@@ -220,8 +433,11 @@ function TablesSidebar({
   const chargeTable = async (table) => {
     try {
       const elapsedSeconds = calculateElapsedSeconds(table);
-      const { totalMinutes, total } =
-        calculateTableFinalChargeBySeconds(elapsedSeconds);
+      const finalCharge = calculateTableFinalChargeWithPromotion(
+        table,
+        elapsedSeconds
+      );
+      const { totalMinutes, total } = finalCharge;
 
       const tableName = getTableName(table);
 
@@ -258,9 +474,13 @@ function TablesSidebar({
         totalMinutes,
         rentalSeconds: totalMinutes * 60,
         rentalTimeLabel: `${totalMinutes} min`,
+        realElapsedSeconds: elapsedSeconds,
+        freePromotionApplied: finalCharge.hasPromo,
+        freePromotionDiscountedSeconds: finalCharge.discountedSeconds || 0,
       });
 
       await api.post(`/PoolTables/${table.poolTableId}/Stop`);
+      removeTableBucketPromo(table.poolTableId);
       await loadTables(false);
 
       notify(`${tableName} enviada al carrito.`, "success");
@@ -303,6 +523,7 @@ function TablesSidebar({
   const renderTableNoteFlag = (table) => {
     const tableNote = getTableNote(table);
     const itemCount = getTableNoteItemCount(tableNote);
+    const pendingBucketPromo = getTableBucketPromo(table);
     const isActive = isTableNoteActive(table);
 
     return (
@@ -354,11 +575,12 @@ function TablesSidebar({
 
   const renderTableCard = (table) => {
     const elapsedSeconds = calculateElapsedSeconds(table);
-    const liveCharge = calculateTableLiveChargeBySeconds(elapsedSeconds);
-    const finalCharge = calculateTableFinalChargeBySeconds(elapsedSeconds);
+    const liveCharge = calculateTableLiveChargeWithPromotion(table, elapsedSeconds);
+    const finalCharge = calculateTableFinalChargeWithPromotion(table, elapsedSeconds);
 
     const tableNote = getTableNote(table);
     const itemCount = getTableNoteItemCount(tableNote);
+    const pendingBucketPromo = getTableBucketPromo(table);
 
     return (
       <article
@@ -378,16 +600,46 @@ function TablesSidebar({
 
         {table.isActive ? (
           <>
-            <div className="pool-table-charge">
-              Cobro actual: {formatCurrency(liveCharge.total)}
-            </div>
+            {liveCharge.hasPromo && liveCharge.freeRemainingSeconds > 0 ? (
+              <div className="pool-table-note-summary pool-table-bucket-hour">
+                <span>
+                  {liveCharge.promoCount > 1
+                    ? `${liveCharge.promoCount} horas por cubeta`
+                    : "Hora por cubeta"}
+                </span>
+                <strong>{formatElapsedTime(liveCharge.freeRemainingSeconds)}</strong>
+                <small>Sin cobro de mesa</small>
+              </div>
+            ) : (
+              <>
+                <div className="pool-table-charge">
+                  Cobro actual: {formatCurrency(liveCharge.total)}
+                </div>
 
-            <div className="pool-table-charge">
-              Final redondeado: {formatCurrency(finalCharge.total)}
-            </div>
+                <div className="pool-table-charge">
+                  Final redondeado: {formatCurrency(finalCharge.total)}
+                </div>
+              </>
+            )}
+
+            {liveCharge.hasPromo && liveCharge.freeRemainingSeconds <= 0 && (
+              <div className="pool-table-note-summary">
+                <span>Promo cubeta</span>
+                <strong>1 hora aplicada</strong>
+              </div>
+            )}
           </>
         ) : (
           <div className="pool-table-charge">Disponible</div>
+        )}
+
+        {!table.isActive && pendingBucketPromo && (
+          <div className="pool-table-note-summary">
+            <span>Promo cubeta pendiente</span>
+            <strong>
+              {Number(pendingBucketPromo.freeSeconds || 3600) / 3600} hora(s) gratis al iniciar
+            </strong>
+          </div>
         )}
 
         {tableNote && (
