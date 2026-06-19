@@ -65,7 +65,6 @@ function PosPage() {
   const [cashCuts, setCashCuts] = useState([]);
 
   const ML_PER_OUNCE = 29.5735;
-  const TABLE_BUCKET_PROMOS_STORAGE_KEY = "nuevoEjidoTableBucketPromos";
 
   useEffect(() => {
     document.title = "El Nuevo Ejido";
@@ -97,6 +96,16 @@ function PosPage() {
 
     return () => clearInterval(interval);
   }, [isEditingBarTabName, activeBarTabId, activeTableTabId]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadProducts();
+      loadBeers();
+      loadBottleBases();
+    }, 300000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const normalizeNameForOrder = (value) => {
     return String(value || "")
@@ -174,108 +183,6 @@ function PosPage() {
     if (text === "false" || text === "0" || text === "inactivo") return false;
 
     return defaultValue;
-  };
-
-  const readTableBucketPromos = () => {
-    try {
-      const rawPromos = localStorage.getItem(TABLE_BUCKET_PROMOS_STORAGE_KEY);
-      return rawPromos ? JSON.parse(rawPromos) : {};
-    } catch (error) {
-      console.error("Error al leer promociones de cubeta:", error);
-      return {};
-    }
-  };
-
-  const saveTableBucketPromos = (promos) => {
-    localStorage.setItem(TABLE_BUCKET_PROMOS_STORAGE_KEY, JSON.stringify(promos));
-    window.dispatchEvent(new Event("table-bucket-promo-updated"));
-  };
-
-  const isBeerBucketProduct = (product) => {
-    const name = normalizeNameForOrder(
-      product?.name ??
-        product?.Name ??
-        product?.productName ??
-        product?.ProductName ??
-        ""
-    );
-    const category = normalizeNameForOrder(product?.category ?? product?.Category ?? "");
-    const productType = String(product?.productType ?? product?.ProductType ?? "")
-      .toUpperCase()
-      .trim();
-
-    return (
-      productType === "BEER_BUCKET" ||
-      name.includes("cubeta") ||
-      (category.includes("cerveza") && name.includes("cubeta"))
-    );
-  };
-
-  const registerTableBucketPromo = (product, targetTableId = null) => {
-    if (!isBeerBucketProduct(product)) {
-      return false;
-    }
-
-    const tableId =
-      targetTableId ??
-      activeTableInfo?.tableId ??
-      activeTableTab?.tableId ??
-      activeTableTab?.TableId ??
-      null;
-
-    if (!tableId) {
-      return false;
-    }
-
-    const promos = readTableBucketPromos();
-    const promoKey = String(tableId);
-    const currentPromo = promos[promoKey] || null;
-
-    const previousGrants = Array.isArray(currentPromo?.grants)
-      ? currentPromo.grants
-      : currentPromo
-      ? [
-          {
-            createdAt: currentPromo.createdAt || new Date().toISOString(),
-            freeSeconds: Number(currentPromo.freeSeconds || 3600),
-            productId: currentPromo.productId ?? null,
-            productName: currentPromo.productName || "Cubeta de cerveza",
-          },
-        ]
-      : [];
-
-    const nextGrant = {
-      createdAt: new Date().toISOString(),
-      freeSeconds: 3600,
-      productId: product.productId ?? product.ProductId ?? null,
-      productName:
-        product.name ?? product.Name ?? product.productName ?? "Cubeta de cerveza",
-    };
-
-    const nextGrants = [...previousGrants, nextGrant];
-    const totalFreeSeconds = nextGrants.reduce(
-      (total, grant) => total + Number(grant.freeSeconds || 0),
-      0
-    );
-
-    promos[promoKey] = {
-      tableId,
-      productId: nextGrant.productId,
-      productName: nextGrant.productName,
-      createdAt: previousGrants[0]?.createdAt || nextGrant.createdAt,
-      freeSeconds: totalFreeSeconds,
-      grants: nextGrants,
-    };
-
-    saveTableBucketPromos(promos);
-
-    const promoHours = Math.floor(totalFreeSeconds / 3600);
-    showToast(
-      `Promoción aplicada: ${promoHours} hora${promoHours === 1 ? "" : "s"} gratis de mesa por cubeta.`,
-      "success"
-    );
-
-    return true;
   };
 
   const showToast = (message, type = "success") => {
@@ -1283,7 +1190,26 @@ function PosPage() {
     ouncesUsed: Number(size.ouncesUsed ?? size.OuncesUsed ?? 0),
     price: Number(size.price ?? size.Price ?? 0),
     imageUrl: getImageUrl(size.imageUrl ?? size.ImageUrl ?? ""),
+    usesLiquor:
+      size.usesLiquor ?? size.UsesLiquor ??
+      (Number(size.ouncesUsed ?? size.OuncesUsed ?? 0) > 0 ||
+        Boolean(size.inventorySourceProductId ?? size.InventorySourceProductId)),
   });
+
+  const drinkSizeUsesLiquor = (size) => {
+    if (!size) return false;
+
+    const explicitValue = size.usesLiquor ?? size.UsesLiquor;
+
+    if (explicitValue !== undefined && explicitValue !== null) {
+      return normalizeBoolean(explicitValue, false);
+    }
+
+    return (
+      Number(size.ouncesUsed ?? size.OuncesUsed ?? 0) > 0 ||
+      Boolean(size.inventorySourceProductId ?? size.InventorySourceProductId)
+    );
+  };
 
   const loadDrinkSizesForProduct = async (product) => {
     const response = await api.get(`/Products/${product.productId}/DrinkSizes`);
@@ -1342,10 +1268,15 @@ function PosPage() {
       }
 
       const firstSize = sizes[0];
-      const bottlesForSize = getLiquorBottlesForSize(firstSize);
-      const selectableBottles = getSelectableLiquorBottlesForSize(firstSize);
+      const firstSizeUsesLiquor = drinkSizeUsesLiquor(firstSize);
+      const bottlesForSize = firstSizeUsesLiquor
+        ? getLiquorBottlesForSize(firstSize)
+        : [];
+      const selectableBottles = firstSizeUsesLiquor
+        ? getSelectableLiquorBottlesForSize(firstSize)
+        : [];
 
-      if (bottlesForSize.length === 0) {
+      if (firstSizeUsesLiquor && bottlesForSize.length === 0) {
         showToast("No hay botellas activas configuradas para preparar esta bebida.", "warning");
         return;
       }
@@ -1355,7 +1286,7 @@ function PosPage() {
         product,
         sizes,
         selectedSize: firstSize,
-        selectedBottle: selectableBottles[0] || null,
+        selectedBottle: firstSizeUsesLiquor ? selectableBottles[0] || null : null,
       });
     } catch (error) {
       console.error("Error al cargar tamaños de licor:", error);
@@ -1388,12 +1319,14 @@ function PosPage() {
       return;
     }
 
-    if (!selectedBottle) {
+    const selectedSizeUsesLiquor = drinkSizeUsesLiquor(selectedSize);
+
+    if (selectedSizeUsesLiquor && !selectedBottle) {
       showToast("Selecciona una botella.", "warning");
       return;
     }
 
-    if (!bottleHasEnoughStock(selectedSize, selectedBottle)) {
+    if (selectedSizeUsesLiquor && !bottleHasEnoughStock(selectedSize, selectedBottle)) {
       showToast(`No hay suficiente stock de ${selectedBottle.name}.`, "warning");
       return;
     }
@@ -1403,14 +1336,16 @@ function PosPage() {
         productId: product.productId,
         productDrinkSizeId: selectedSize.productDrinkSizeId,
         drinkSizeName: selectedSize.sizeName,
-        ouncesUsed: Number(selectedSize.ouncesUsed || 0),
-        name: `${product.name} - ${selectedSize.sizeName} - ${selectedBottle.name}`,
+        ouncesUsed: selectedSizeUsesLiquor ? Number(selectedSize.ouncesUsed || 0) : 0,
+        name: selectedSizeUsesLiquor
+          ? `${product.name} - ${selectedSize.sizeName} - ${selectedBottle.name}`
+          : `${product.name} - ${selectedSize.sizeName}`,
         quantity: 1,
         unitPrice: Number(selectedSize.price || 0),
         subtotal: Number(selectedSize.price || 0),
         productType: product.productType,
         selectedBeerProductId: null,
-        selectedBottleProductId: selectedBottle.productId,
+        selectedBottleProductId: selectedSizeUsesLiquor ? selectedBottle.productId : null,
         totalMinutes: null,
       };
 
@@ -1424,14 +1359,7 @@ function PosPage() {
 
   const sendItemToCurrentDestination = async (item, successMessage = "Producto agregado al carrito.") => {
     if (shouldSendProductsToTableTab) {
-      const tableId =
-        activeTableInfo?.tableId ??
-        activeTableTab?.tableId ??
-        activeTableTab?.TableId ??
-        null;
-
       await addToTableTab(item);
-      registerTableBucketPromo(item, tableId);
       return;
     }
 
@@ -1517,6 +1445,35 @@ function PosPage() {
       await loadCart();
     } catch (error) {
       console.error("Error al disminuir cantidad:", error);
+      showToast("No se pudo actualizar la cantidad.", "error");
+    }
+  };
+
+  const updateCartItemQuantity = async (cartItemId, rawQuantity) => {
+    const item = cart.find((cartItem) => cartItem.cartItemId === cartItemId);
+    if (!item) return;
+
+    const parsedQuantity = Number(rawQuantity);
+
+    if (!Number.isFinite(parsedQuantity)) {
+      showToast("Ingresa una cantidad válida.", "warning");
+      return;
+    }
+
+    const newQuantity = Math.floor(parsedQuantity);
+
+    try {
+      if (newQuantity <= 0) {
+        await api.delete(`/ActiveCart/Items/${item.activeCartItemId}`);
+      } else {
+        await api.put(`/ActiveCart/Items/${item.activeCartItemId}`, {
+          quantity: newQuantity,
+        });
+      }
+
+      await loadCart();
+    } catch (error) {
+      console.error("Error al actualizar cantidad manual:", error);
       showToast("No se pudo actualizar la cantidad.", "error");
     }
   };
@@ -1777,7 +1734,12 @@ function PosPage() {
       await api.post("/Sales", payload);
       showToast("Venta registrada correctamente.", "success");
       await clearCart();
-      await loadCashBox();
+      await Promise.all([
+        loadProducts(),
+        loadBeers(),
+        loadBottleBases(),
+        loadCashBox(),
+      ]);
       setCashReceived("");
       setPaymentReference("");
       setSourceCreditSaleId(null);
@@ -2182,7 +2144,9 @@ function PosPage() {
               <div className="beer-selector-header">
                 <div>
                   <h2>{liquorModal.product?.name}</h2>
-                  <p>Selecciona primero el tamaño y después la botella con la que se preparará.</p>
+                  <p>
+                    Selecciona el tamaño. Si el tamaño no usa licor, se registra la venta sin descontar botella.
+                  </p>
                 </div>
 
                 <button type="button" className="modal-close-button" onClick={closeLiquorModal}>
@@ -2209,11 +2173,16 @@ function PosPage() {
                         key={sizeKey}
                         className={`liquor-size-card ${isSelected ? "liquor-size-card-active" : ""}`}
                         onClick={() => {
-                          const selectableBottlesForSize = getSelectableLiquorBottlesForSize(size);
+                          const sizeUsesLiquor = drinkSizeUsesLiquor(size);
+                          const selectableBottlesForSize = sizeUsesLiquor
+                            ? getSelectableLiquorBottlesForSize(size)
+                            : [];
                           const stillValidBottle = selectableBottlesForSize.find(
                             (bottle) => Number(bottle.productId) === Number(liquorModal.selectedBottle?.productId)
                           );
-                          const nextBottle = stillValidBottle || selectableBottlesForSize[0] || null;
+                          const nextBottle = sizeUsesLiquor
+                            ? stillValidBottle || selectableBottlesForSize[0] || null
+                            : null;
 
                           setLiquorModal((prev) => ({
                             ...prev,
@@ -2227,7 +2196,11 @@ function PosPage() {
                         </div>
                         <div className="liquor-size-info">
                           <strong>{size.sizeName}</strong>
-                          <span>{Number(size.ouncesUsed || 0)} oz</span>
+                          {drinkSizeUsesLiquor(size) ? (
+                            <span>{Number(size.ouncesUsed || 0)} oz</span>
+                          ) : (
+                            <span>Sin licor · sin descuento de botella</span>
+                          )}
                           <b>{formatCurrency(size.price)}</b>
                         </div>
                       </button>
@@ -2236,58 +2209,67 @@ function PosPage() {
                 </div>
               </div>
 
-              <div className="liquor-modal-section liquor-bottle-section">
-                <div className="liquor-section-title">
-                  <strong>Botellas disponibles</strong>
-                  <span>
-                    Se muestran las botellas activas del inventario. Las que no tengan existencia suficiente aparecen deshabilitadas.
-                  </span>
+              {drinkSizeUsesLiquor(liquorModal.selectedSize) ? (
+                <div className="liquor-modal-section liquor-bottle-section">
+                  <div className="liquor-section-title">
+                    <strong>Botellas disponibles</strong>
+                    <span>
+                      Se muestran las botellas activas del inventario. Las que no tengan existencia suficiente aparecen deshabilitadas.
+                    </span>
+                  </div>
+
+                  <div className="liquor-bottle-row liquor-bottle-row-expanded">
+                    {getLiquorBottlesForSize(liquorModal.selectedSize).map((bottle) => {
+                      const stock = Number(bottle.stock || 0);
+                      const hasEnoughStock = bottleHasEnoughStock(liquorModal.selectedSize, bottle);
+                      const isSelected =
+                        hasEnoughStock &&
+                        Number(liquorModal.selectedBottle?.productId) === Number(bottle.productId);
+                      const approxDrinks = getApproxDrinksFromBottle(liquorModal.selectedSize, bottle);
+
+                      return (
+                        <button
+                          type="button"
+                          key={bottle.productId}
+                          className={`liquor-bottle-chip ${isSelected ? "liquor-bottle-chip-active" : ""} ${
+                            !hasEnoughStock ? "liquor-bottle-chip-disabled" : ""
+                          }`}
+                          disabled={!hasEnoughStock}
+                          onClick={() => {
+                            if (!hasEnoughStock) return;
+
+                            setLiquorModal((prev) => ({
+                              ...prev,
+                              selectedBottle: bottle,
+                            }));
+                          }}
+                        >
+                          <div className="liquor-bottle-image">
+                            {bottle.imageUrl ? <img src={bottle.imageUrl} alt={bottle.name} /> : <span>Sin imagen</span>}
+                          </div>
+
+                          <div className="liquor-bottle-info">
+                            <strong>{bottle.name}</strong>
+                            <span>Stock: {stock.toFixed(2)}</span>
+                            {hasEnoughStock ? (
+                              <small>Aprox.: {approxDrinks} bebida(s)</small>
+                            ) : (
+                              <small className="liquor-bottle-unavailable">Sin existencia suficiente</small>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-
-                <div className="liquor-bottle-row liquor-bottle-row-expanded">
-                  {getLiquorBottlesForSize(liquorModal.selectedSize).map((bottle) => {
-                    const stock = Number(bottle.stock || 0);
-                    const hasEnoughStock = bottleHasEnoughStock(liquorModal.selectedSize, bottle);
-                    const isSelected =
-                      hasEnoughStock &&
-                      Number(liquorModal.selectedBottle?.productId) === Number(bottle.productId);
-                    const approxDrinks = getApproxDrinksFromBottle(liquorModal.selectedSize, bottle);
-
-                    return (
-                      <button
-                        type="button"
-                        key={bottle.productId}
-                        className={`liquor-bottle-chip ${isSelected ? "liquor-bottle-chip-active" : ""} ${
-                          !hasEnoughStock ? "liquor-bottle-chip-disabled" : ""
-                        }`}
-                        disabled={!hasEnoughStock}
-                        onClick={() => {
-                          if (!hasEnoughStock) return;
-
-                          setLiquorModal((prev) => ({
-                            ...prev,
-                            selectedBottle: bottle,
-                          }));
-                        }}
-                      >
-                        <div className="liquor-bottle-image">
-                          {bottle.imageUrl ? <img src={bottle.imageUrl} alt={bottle.name} /> : <span>Sin imagen</span>}
-                        </div>
-
-                        <div className="liquor-bottle-info">
-                          <strong>{bottle.name}</strong>
-                          <span>Stock: {stock.toFixed(2)}</span>
-                          {hasEnoughStock ? (
-                            <small>Aprox.: {approxDrinks} bebida(s)</small>
-                          ) : (
-                            <small className="liquor-bottle-unavailable">Sin existencia suficiente</small>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
+              ) : (
+                <div className="liquor-modal-section">
+                  <div className="liquor-section-title">
+                    <strong>Sin licor</strong>
+                    <span>Este tamaño solo registra la venta; no descuenta botella ni onzas del inventario.</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="modal-actions">
                 <button type="button" className="modal-cancel-button" onClick={closeLiquorModal}>
@@ -2299,8 +2281,9 @@ function PosPage() {
                   onClick={addLiquorSelectionToCart}
                   disabled={
                     !liquorModal.selectedSize ||
-                    !liquorModal.selectedBottle ||
-                    !bottleHasEnoughStock(liquorModal.selectedSize, liquorModal.selectedBottle)
+                    (drinkSizeUsesLiquor(liquorModal.selectedSize) &&
+                      (!liquorModal.selectedBottle ||
+                        !bottleHasEnoughStock(liquorModal.selectedSize, liquorModal.selectedBottle)))
                   }
                 >
                   Agregar al carrito
@@ -2648,11 +2631,38 @@ function PosPage() {
 
                     <div className="cart-line-quantity">
                       {!item.totalMinutes ? (
-                        <>
-                          <button type="button" onClick={() => decreaseQuantity(item.cartItemId)}>−</button>
-                          <span>{quantityLabel}</span>
-                          <button type="button" onClick={() => increaseQuantity(item.cartItemId)}>+</button>
-                        </>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="cart-quantity-input"
+                          style={{
+                            width: "64px",
+                            textAlign: "center",
+                            borderRadius: "8px",
+                            border: "1px solid #d1d5db",
+                            padding: "4px 6px",
+                          }}
+                          defaultValue={Number(item.quantity || 1)}
+                          onFocus={(e) => e.currentTarget.select()}
+                          onBlur={(e) => {
+                            const value = e.currentTarget.value;
+
+                            if (value === "") {
+                              e.currentTarget.value = Number(item.quantity || 1);
+                              return;
+                            }
+
+                            updateCartItemQuantity(item.cartItemId, value);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              updateCartItemQuantity(item.cartItemId, e.currentTarget.value);
+                              e.currentTarget.blur();
+                            }
+                          }}
+                          aria-label={`Cantidad de ${item.name}`}
+                        />
                       ) : (
                         <span>{quantityLabel}</span>
                       )}
