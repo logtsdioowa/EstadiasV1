@@ -65,6 +65,31 @@ function PosPage() {
   const [cashCuts, setCashCuts] = useState([]);
 
   const ML_PER_OUNCE = 29.5735;
+  const TABLE_BUCKET_PROMO_STORAGE_KEY = "nuevoEjidoTableBucketPromos";
+
+  const readTableBucketPromos = () => {
+    try {
+      const rawPromos = window.localStorage.getItem(
+        TABLE_BUCKET_PROMO_STORAGE_KEY
+      );
+
+      return rawPromos ? JSON.parse(rawPromos) : {};
+    } catch (error) {
+      console.error("Error al leer promociones de cubeta:", error);
+      return {};
+    }
+  };
+
+  const saveTableBucketPromos = (promos) => {
+    try {
+      window.localStorage.setItem(
+        TABLE_BUCKET_PROMO_STORAGE_KEY,
+        JSON.stringify(promos || {})
+      );
+    } catch (error) {
+      console.error("Error al guardar promociones de cubeta:", error);
+    }
+  };
 
   useEffect(() => {
     document.title = "El Nuevo Ejido";
@@ -144,6 +169,89 @@ function PosPage() {
       name.includes("budlight") ||
       name.includes("corona")
     );
+  };
+
+
+  const isBeerBucketProduct = (product) => {
+    const name = normalizeNameForOrder(product?.name);
+    const category = normalizeNameForOrder(product?.category);
+    const productType = String(product?.productType || "").toUpperCase();
+
+    return (
+      productType === "BEER_BUCKET" ||
+      name.includes("cubeta") ||
+      category.includes("cubeta")
+    );
+  };
+
+  const registerTableBucketPromo = (product, targetTableId = null) => {
+    if (!isBeerBucketProduct(product)) {
+      return false;
+    }
+
+    const tableId =
+      targetTableId ??
+      activeTableInfo?.tableId ??
+      activeTableTab?.tableId ??
+      activeTableTab?.TableId ??
+      null;
+
+    if (!tableId) {
+      return false;
+    }
+
+    const promos = readTableBucketPromos();
+    const promoKey = String(tableId);
+    const currentPromo = promos[promoKey] || null;
+
+    const previousGrants = Array.isArray(currentPromo?.grants)
+      ? currentPromo.grants
+      : currentPromo
+      ? [
+          {
+            createdAt: currentPromo.createdAt || new Date().toISOString(),
+            freeSeconds: Number(currentPromo.freeSeconds || 3600),
+            productId: currentPromo.productId ?? null,
+            productName: currentPromo.productName || "Cubeta de cerveza",
+          },
+        ]
+      : [];
+
+    const nextGrant = {
+      createdAt: new Date().toISOString(),
+      freeSeconds: 3600,
+      productId: product.productId ?? product.ProductId ?? null,
+      productName:
+        product.name ?? product.Name ?? product.productName ?? "Cubeta de cerveza",
+    };
+
+    const nextGrants = [...previousGrants, nextGrant];
+    const totalFreeSeconds = nextGrants.reduce(
+      (total, grant) => total + Number(grant.freeSeconds || 0),
+      0
+    );
+
+    promos[promoKey] = {
+      tableId,
+      productId: nextGrant.productId,
+      productName: nextGrant.productName,
+      createdAt: previousGrants[0]?.createdAt || nextGrant.createdAt,
+      activatedAt: previousGrants[0]?.createdAt || nextGrant.createdAt,
+      freeSeconds: totalFreeSeconds,
+      grants: nextGrants,
+    };
+
+    saveTableBucketPromos(promos);
+
+    const promoHours = Math.floor(totalFreeSeconds / 3600);
+    showToast(
+      `Promoción aplicada: ${promoHours} hora${
+        promoHours === 1 ? "" : "s"
+      } gratis de mesa por cubeta.`,
+      "success"
+    );
+
+    return true;
   };
 
   const sortProductsByBeerOrder = (a, b) => {
@@ -1175,7 +1283,19 @@ function PosPage() {
         totalMinutes: null,
       };
 
+      const promoTableId = shouldSendProductsToTableTab
+        ? activeTableInfo?.tableId ??
+          activeTableTab?.tableId ??
+          activeTableTab?.TableId ??
+          null
+        : null;
+
       await sendItemToCurrentDestination(item, "Producto agregado al carrito.");
+
+      if (promoTableId) {
+        registerTableBucketPromo(product, promoTableId);
+      }
+
       closeBeerModal();
     } catch (error) {
       console.error("Error al agregar bebida con cerveza:", error);
@@ -1405,7 +1525,18 @@ function PosPage() {
         totalMinutes: null,
       };
 
+      const promoTableId = shouldSendProductsToTableTab
+        ? activeTableInfo?.tableId ??
+          activeTableTab?.tableId ??
+          activeTableTab?.TableId ??
+          null
+        : null;
+
       await sendItemToCurrentDestination(item, "Producto agregado al carrito.");
+
+      if (promoTableId) {
+        registerTableBucketPromo(product, promoTableId);
+      }
     } catch (error) {
       console.error("Error al agregar producto al carrito:", error);
       showToast("No se pudo agregar el producto al carrito.", "error");
@@ -1587,9 +1718,15 @@ function PosPage() {
         tableCharge.tableName ?? tableCharge.TableName ?? `Mesa ${tableNumber || tableId || ""}`;
       const tableType = tableCharge.tableType ?? tableCharge.TableType ?? "";
 
-      let targetTableTabId = activeTableTabId;
+      const hasTableNote = Boolean(
+        tableCharge.hasTableNote ??
+          tableCharge.HasTableNote ??
+          Number(tableCharge.tableNoteItemCount || 0) > 0
+      );
 
-      if (tableId) {
+      let targetTableTabId = null;
+
+      if (hasTableNote && tableId) {
         const response = await api.post("/BarTabs/Table/Open", {
           tableId,
           tableNumber,

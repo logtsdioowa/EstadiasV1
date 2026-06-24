@@ -11,6 +11,10 @@ function TablesSidebar({
 }) {
   const [tables, setTables] = useState([]);
   const [loadingTables, setLoadingTables] = useState(false);
+  const [localTick, setLocalTick] = useState(0);
+
+  const TABLE_PRICE_PER_MINUTE = 0.83;
+  const FREE_SECONDS_PER_BUCKET = 3600;
 
   const notify = (message, type = "success") => {
     if (typeof onNotify === "function") {
@@ -21,11 +25,20 @@ function TablesSidebar({
   useEffect(() => {
     loadTables();
 
-    const interval = setInterval(() => {
+    // No consultar la API cada segundo. La API solo sincroniza cada 30 segundos.
+    const tableRefreshInterval = setInterval(() => {
       loadTables(false);
+    }, 30000);
+
+    // Este intervalo solo fuerza el repintado local de timers.
+    const localTimerInterval = setInterval(() => {
+      setLocalTick((prev) => prev + 1);
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(tableRefreshInterval);
+      clearInterval(localTimerInterval);
+    };
   }, []);
 
   const normalizeTable = (table) => {
@@ -52,7 +65,11 @@ function TablesSidebar({
       tableType,
       status,
       startedAt,
-      elapsedSeconds,
+      elapsedSeconds:
+        elapsedSeconds !== null && elapsedSeconds !== undefined
+          ? Number(elapsedSeconds || 0)
+          : null,
+      syncedAtMs: Date.now(),
       isActive:
         status === "ACTIVE" ||
         status === "OCCUPIED" ||
@@ -78,7 +95,10 @@ function TablesSidebar({
       setTables(normalizedTables);
     } catch (error) {
       console.error("Error al cargar mesas:", error);
-      notify("No se pudieron cargar las mesas de billar.", "error");
+
+      if (showLoading) {
+        notify("No se pudieron cargar las mesas de billar.", "error");
+      }
     } finally {
       if (showLoading) {
         setLoadingTables(false);
@@ -87,10 +107,19 @@ function TablesSidebar({
   };
 
   const calculateElapsedSeconds = (table) => {
-    if (!table) return 0;
+    if (!table || !table.isActive) return 0;
 
+    // Si la API manda elapsedSeconds, no se debe dejar fijo.
+    // Se toma como base y se suma el tiempo transcurrido localmente desde la última sincronización.
     if (table.elapsedSeconds !== null && table.elapsedSeconds !== undefined) {
-      return Number(table.elapsedSeconds || 0);
+      const secondsSinceSync = Math.floor(
+        (Date.now() - Number(table.syncedAtMs || Date.now())) / 1000
+      );
+
+      return Math.max(
+        0,
+        Number(table.elapsedSeconds || 0) + Math.max(0, secondsSinceSync)
+      );
     }
 
     if (!table.startedAt) return 0;
@@ -104,8 +133,6 @@ function TablesSidebar({
 
     return Math.max(0, Math.floor((now - startedDate) / 1000));
   };
-
-  const TABLE_PRICE_PER_MINUTE = 0.83;
 
   const calculateTableLiveChargeBySeconds = (elapsedSeconds) => {
     const seconds = Math.max(0, Number(elapsedSeconds || 0));
@@ -125,19 +152,23 @@ function TablesSidebar({
     return calculateTableLiveChargeBySeconds(elapsedSeconds);
   };
 
+  const calculateBillableSeconds = (elapsedSeconds, freeSeconds) => {
+    return Math.max(0, Number(elapsedSeconds || 0) - Number(freeSeconds || 0));
+  };
+
+  const calculateRemainingFreeSeconds = (elapsedSeconds, freeSeconds) => {
+    return Math.max(0, Number(freeSeconds || 0) - Number(elapsedSeconds || 0));
+  };
+
   const formatElapsedTime = (secondsValue) => {
-    const totalSeconds = Math.max(0, Number(secondsValue || 0));
+    const totalSeconds = Math.max(0, Math.floor(Number(secondsValue || 0)));
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
 
     const pad = (value) => String(value).padStart(2, "0");
 
-    if (hours > 0) {
-      return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-    }
-
-    return `${pad(minutes)}:${pad(seconds)}`;
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
   };
 
   const formatCurrency = (value) => {
@@ -145,6 +176,14 @@ function TablesSidebar({
       style: "currency",
       currency: "MXN",
     });
+  };
+
+  const normalizeText = (value) => {
+    return String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
   };
 
   const getTableName = (table) => {
@@ -169,6 +208,33 @@ function TablesSidebar({
     const items = tableNote.items ?? tableNote.Items ?? [];
 
     return items.length;
+  };
+
+  const isBucketItem = (item) => {
+    const name = normalizeText(item?.name ?? item?.Name);
+    const productType = String(
+      item?.productType ?? item?.ProductType ?? ""
+    ).toUpperCase();
+
+    return productType === "BEER_BUCKET" || name.includes("cubeta");
+  };
+
+  const getTableBucketCount = (table) => {
+    const tableNote = getTableNote(table);
+
+    if (!tableNote) return 0;
+
+    const items = tableNote.items ?? tableNote.Items ?? [];
+
+    return items.reduce((total, item) => {
+      if (!isBucketItem(item)) return total;
+
+      return total + Number(item.quantity ?? item.Quantity ?? 1);
+    }, 0);
+  };
+
+  const getTableFreeSecondsByBucket = (table) => {
+    return getTableBucketCount(table) * FREE_SECONDS_PER_BUCKET;
   };
 
   const isTableNoteActive = (table) => {
@@ -211,8 +277,14 @@ function TablesSidebar({
   const chargeTable = async (table) => {
     try {
       const elapsedSeconds = calculateElapsedSeconds(table);
+      const freeSecondsByBucket = getTableFreeSecondsByBucket(table);
+      const billableSeconds = calculateBillableSeconds(
+        elapsedSeconds,
+        freeSecondsByBucket
+      );
+
       const { totalMinutes, total } =
-        calculateTableFinalChargeBySeconds(elapsedSeconds);
+        calculateTableFinalChargeBySeconds(billableSeconds);
 
       const tableName = getTableName(table);
 
@@ -247,7 +319,7 @@ function TablesSidebar({
         tableType: table.tableType,
 
         totalMinutes,
-        rentalSeconds: totalMinutes * 60,
+        rentalSeconds: billableSeconds,
         rentalTimeLabel: `${totalMinutes} min`,
       });
 
@@ -316,7 +388,7 @@ function TablesSidebar({
     );
   };
 
-  const renderTableShape = (table, elapsedSeconds) => {
+  const renderTableShape = (table, displaySeconds) => {
     const isCarambola = String(table.tableType || "")
       .toLowerCase()
       .includes("carambola");
@@ -336,7 +408,7 @@ function TablesSidebar({
 
         {table.isActive && (
           <div className="pool-table-timer">
-            {formatElapsedTime(elapsedSeconds)}
+            {formatElapsedTime(displaySeconds)}
           </div>
         )}
       </div>
@@ -344,12 +416,28 @@ function TablesSidebar({
   };
 
   const renderTableCard = (table) => {
+    // Fuerza el repintado cada segundo, incluso si la API no se consulta.
+    localTick;
+
     const elapsedSeconds = calculateElapsedSeconds(table);
-    const liveCharge = calculateTableLiveChargeBySeconds(elapsedSeconds);
-    const finalCharge = calculateTableFinalChargeBySeconds(elapsedSeconds);
+    const freeSecondsByBucket = getTableFreeSecondsByBucket(table);
+    const remainingFreeSeconds = calculateRemainingFreeSeconds(
+      elapsedSeconds,
+      freeSecondsByBucket
+    );
+    const billableSeconds = calculateBillableSeconds(
+      elapsedSeconds,
+      freeSecondsByBucket
+    );
+
+    const liveCharge = calculateTableLiveChargeBySeconds(billableSeconds);
+    const finalCharge = calculateTableFinalChargeBySeconds(billableSeconds);
 
     const tableNote = getTableNote(table);
     const itemCount = getTableNoteItemCount(tableNote);
+    const bucketCount = getTableBucketCount(table);
+    const hasBucketPromo = bucketCount > 0;
+    const isBucketPromoActive = remainingFreeSeconds > 0;
 
     return (
       <article
@@ -365,10 +453,27 @@ function TablesSidebar({
           <span>{table.isActive ? "En uso" : "Libre"}</span>
         </div>
 
-        {renderTableShape(table, elapsedSeconds)}
+        {renderTableShape(table, billableSeconds)}
 
         {table.isActive ? (
           <>
+            {hasBucketPromo && (
+              <div className="pool-table-charge table-bucket-promo">
+                <strong>Hora por cubeta:</strong>{" "}
+                {formatElapsedTime(remainingFreeSeconds)}
+                <small>
+                  {" "}
+                  ({bucketCount} cubeta{bucketCount === 1 ? "" : "s"})
+                </small>
+              </div>
+            )}
+
+            {isBucketPromoActive && (
+              <div className="pool-table-charge table-bucket-promo-active">
+                Sin cobro de mesa
+              </div>
+            )}
+
             <div className="pool-table-charge">
               Cobro actual: {formatCurrency(liveCharge.total)}
             </div>
