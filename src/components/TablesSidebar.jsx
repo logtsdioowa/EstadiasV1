@@ -287,6 +287,9 @@ function TablesSidebar({
         calculateTableFinalChargeBySeconds(billableSeconds);
 
       const tableName = getTableName(table);
+      const tableNote = getTableNote(table);
+      const tableNoteItemCount = getTableNoteItemCount(tableNote);
+      const hasTableNote = Boolean(tableNote && tableNoteItemCount > 0);
 
       if (typeof onAddTableCharge !== "function") {
         notify("No está conectada la función para cobrar la mesa.", "error");
@@ -318,6 +321,12 @@ function TablesSidebar({
         tableName,
         tableType: table.tableType,
 
+        // Permite que PosPage mande también los productos de la nota al carrito.
+        // No modifica la lógica del contador ni de la cubeta.
+        hasTableNote,
+        tableNoteItemCount,
+        tableNoteId: tableNote?.barTabId ?? tableNote?.BarTabId ?? null,
+
         totalMinutes,
         rentalSeconds: billableSeconds,
         rentalTimeLabel: `${totalMinutes} min`,
@@ -326,7 +335,12 @@ function TablesSidebar({
       await api.post(`/PoolTables/${table.poolTableId}/Stop`);
       await loadTables(false);
 
-      notify(`${tableName} enviada al carrito.`, "success");
+      notify(
+        hasTableNote
+          ? `${tableName} y su nota fueron enviadas al carrito.`
+          : `${tableName} enviada al carrito.`,
+        "success"
+      );
     } catch (error) {
       console.error("Error al cobrar mesa:", error);
       notify("No se pudo cobrar la mesa.", "error");

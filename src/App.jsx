@@ -23,6 +23,7 @@ function App() {
           <Route path="inventario" element={<InventoryPanel />} />
           <Route path="reportes" element={<ReportsPage />} />
           <Route path="ventas" element={<SalesHistoryPage />} />
+          
         </Route>
 
         <Route path="*" element={<Navigate to="/pos" replace />} />
