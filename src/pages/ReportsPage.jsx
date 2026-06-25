@@ -378,6 +378,61 @@ function ReportsPage() {
     }));
   };
 
+  const getCutItemCategory = (item) => {
+    const explicitCategory =
+      item?.category ??
+      item?.Category ??
+      item?.categoryName ??
+      item?.CategoryName ??
+      item?.productCategory ??
+      item?.ProductCategory ??
+      null;
+
+    if (explicitCategory) {
+      return explicitCategory;
+    }
+
+    const productType = String(
+      item?.productType ?? item?.ProductType ?? ""
+    ).toUpperCase();
+
+    if (productType === "SERVICE") return "Servicios";
+    if (productType === "BEER_BUCKET") return "Cubetas";
+    if (productType === "PREPARED_DRINK") return "Bebidas preparadas";
+    if (productType === "LIQUOR_DRINK") return "Bebidas con licor";
+    if (productType === "SHOT") return "Shots";
+    if (productType === "BOTTLED_DRINK") return "Bebidas embotelladas";
+    if (productType === "PACK") return "Paquetes";
+    if (productType === "CIGARETTE_UNIT") return "Cigarros";
+
+    return "Sin categoría";
+  };
+
+  const groupCutItemsByCategory = (items = []) => {
+    const grouped = {};
+
+    items.forEach((item) => {
+      const category = getCutItemCategory(item);
+
+      if (!grouped[category]) {
+        grouped[category] = [];
+      }
+
+      grouped[category].push(item);
+    });
+
+    return Object.entries(grouped)
+      .map(([category, categoryItems]) => ({
+        category,
+        items: categoryItems,
+        total: categoryItems.reduce(
+          (sum, item) => sum + Number(item.subtotal ?? item.total ?? 0),
+          0
+        ),
+      }))
+      .sort((a, b) => a.category.localeCompare(b.category, "es-MX"));
+  };
+
   return (
     <div className="page-card reports-page">
       {toast && (
@@ -429,8 +484,8 @@ function ReportsPage() {
     
 
           <button
-            type="button" class="btn btn-primary"
-            className={reportMode === "cuts" ? "active" : ""}
+            type="button"
+            className={reportMode === "cuts" ? "active btn btn-primary" : "btn btn-primary"}
             onClick={() => setReportMode("cuts")}
           >
             Por corte
@@ -590,6 +645,7 @@ function ReportsPage() {
             const soldItems = cut.soldItems || [];
             const courtesyItems = cut.courtesyItems || [];
             const withdrawals = cut.withdrawals || [];
+            const soldGroups = groupCutItemsByCategory(soldItems);
 
             const soldTotal = soldItems.reduce(
               (sum, item) => sum + Number(item.subtotal || 0),
@@ -649,20 +705,33 @@ function ReportsPage() {
                         </tr>
                       )}
 
-                      {soldItems.map((item, index) => (
-                        <tr key={`cut-item-${index}-${item.productName}`}>
-                          <td>
-                            {item.productName}
-                            {item.drinkSizeName ? ` - ${item.drinkSizeName}` : ""}
-                          </td>
-                          <td>
-                            {item.totalMinutes
-                              ? `${formatNumber(item.totalMinutes)} min`
-                              : formatNumber(item.quantity)}
-                          </td>
-                          <td>{formatCurrency(item.unitPrice)}</td>
-                          <td>{formatCurrency(item.subtotal)}</td>
-                        </tr>
+                      {soldGroups.map((group) => (
+                        <Fragment key={`cut-category-${cut.cashBoxCutId || cut.cashMovementId}-${group.category}`}>
+                          <tr className="report-category-row">
+                            <td colSpan="3">
+                              <strong>{group.category}</strong>
+                            </td>
+                            <td>
+                              <strong>{formatCurrency(group.total)}</strong>
+                            </td>
+                          </tr>
+
+                          {group.items.map((item, index) => (
+                            <tr key={`cut-item-${group.category}-${index}-${item.productName}`}>
+                              <td>
+                                {item.productName}
+                                {item.drinkSizeName ? ` - ${item.drinkSizeName}` : ""}
+                              </td>
+                              <td>
+                                {item.totalMinutes
+                                  ? `${formatNumber(item.totalMinutes)} min`
+                                  : formatNumber(item.quantity)}
+                              </td>
+                              <td>{formatCurrency(item.unitPrice)}</td>
+                              <td>{formatCurrency(item.subtotal)}</td>
+                            </tr>
+                          ))}
+                        </Fragment>
                       ))}
                     </tbody>
                     {soldItems.length > 0 && (
@@ -739,24 +808,37 @@ function ReportsPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {(courtesy.products || []).map((product, index) => (
-                            <tr
-                              key={`courtesy-product-${courtesy.saleId}-${index}`}
-                            >
-                              <td>
-                                {product.productName}
-                                {product.drinkSizeName
-                                  ? ` - ${product.drinkSizeName}`
-                                  : ""}
-                              </td>
-                              <td>
-                                {product.totalMinutes
-                                  ? `${formatNumber(product.totalMinutes)} min`
-                                  : formatNumber(product.quantity)}
-                              </td>
-                              <td>{formatCurrency(product.unitPrice)}</td>
-                              <td>{formatCurrency(product.subtotal)}</td>
-                            </tr>
+                          {groupCutItemsByCategory(courtesy.products || []).map((group) => (
+                            <Fragment key={`courtesy-category-${courtesy.saleId}-${group.category}`}>
+                              <tr className="report-category-row">
+                                <td colSpan="3">
+                                  <strong>{group.category}</strong>
+                                </td>
+                                <td>
+                                  <strong>{formatCurrency(group.total)}</strong>
+                                </td>
+                              </tr>
+
+                              {group.items.map((product, index) => (
+                                <tr
+                                  key={`courtesy-product-${courtesy.saleId}-${group.category}-${index}`}
+                                >
+                                  <td>
+                                    {product.productName}
+                                    {product.drinkSizeName
+                                      ? ` - ${product.drinkSizeName}`
+                                      : ""}
+                                  </td>
+                                  <td>
+                                    {product.totalMinutes
+                                      ? `${formatNumber(product.totalMinutes)} min`
+                                      : formatNumber(product.quantity)}
+                                  </td>
+                                  <td>{formatCurrency(product.unitPrice)}</td>
+                                  <td>{formatCurrency(product.subtotal)}</td>
+                                </tr>
+                              ))}
+                            </Fragment>
                           ))}
                         </tbody>
                       </table>

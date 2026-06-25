@@ -64,6 +64,11 @@ function PosPage() {
   const [cashCutsModalOpen, setCashCutsModalOpen] = useState(false);
   const [cashCuts, setCashCuts] = useState([]);
 
+  const [manualCreditModalOpen, setManualCreditModalOpen] = useState(false);
+  const [manualCreditName, setManualCreditName] = useState("");
+  const [manualCreditAmount, setManualCreditAmount] = useState("");
+  const [manualCreditDescription, setManualCreditDescription] = useState("");
+
   const ML_PER_OUNCE = 29.5735;
   const TABLE_BUCKET_PROMO_STORAGE_KEY = "nuevoEjidoTableBucketPromos";
 
@@ -330,6 +335,24 @@ function PosPage() {
     if (name.includes("crédito") || name.includes("credito")) return "credit";
 
     return "default";
+  };
+
+  const getCreditPaymentMethod = () => {
+    return paymentMethods.find((method) => {
+      const name = String(method.name || "").toLowerCase().trim();
+      return name === "crédito" || name === "credito";
+    });
+  };
+
+  const isManualCreditProduct = (product) => {
+    const productType = String(product?.productType || "").toUpperCase();
+    const name = normalizeNameForOrder(product?.name);
+
+    return productType === "SERVICE" && name.includes("credito manual");
+  };
+
+  const getManualCreditProduct = () => {
+    return products.find(isManualCreditProduct) || null;
   };
 
   const renderPaymentMethodIcon = (methodName) => {
@@ -1676,6 +1699,89 @@ function PosPage() {
     }
   };
 
+  const openManualCreditModal = () => {
+    setManualCreditName("");
+    setManualCreditAmount("");
+    setManualCreditDescription("");
+    setManualCreditModalOpen(true);
+  };
+
+  const closeManualCreditModal = () => {
+    setManualCreditModalOpen(false);
+    setManualCreditName("");
+    setManualCreditAmount("");
+    setManualCreditDescription("");
+  };
+
+  const submitManualCredit = async () => {
+    const amount = Number(manualCreditAmount || 0);
+    const debtorName = manualCreditName.trim();
+    const description = manualCreditDescription.trim();
+
+    if (!debtorName) {
+      showToast("Ingresa el nombre o referencia de quien debe.", "warning");
+      return;
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast("El monto del crédito debe ser mayor a cero.", "warning");
+      return;
+    }
+
+    const creditPaymentMethod = getCreditPaymentMethod();
+
+    if (!creditPaymentMethod) {
+      showToast("No existe el método de pago Crédito.", "error");
+      return;
+    }
+
+    const manualCreditProduct = getManualCreditProduct();
+
+    if (!manualCreditProduct) {
+      showToast("Falta crear el producto interno 'Crédito manual'.", "error");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await api.post("/Sales", {
+        userId: 1,
+        paymentMethodId: Number(creditPaymentMethod.paymentMethodId),
+        paymentReference: description
+          ? `${debtorName} - ${description}`
+          : debtorName,
+        sourceCreditSaleId: null,
+        details: [
+          {
+            productId: manualCreditProduct.productId,
+            name: `Crédito manual - ${debtorName}`,
+            quantity: 1,
+            customUnitPrice: amount,
+            selectedBeerProductId: null,
+            selectedBottleProductId: null,
+            productDrinkSizeId: null,
+            drinkSizeName: null,
+            ouncesUsed: null,
+            totalMinutes: null,
+          },
+        ],
+      });
+
+      closeManualCreditModal();
+      await loadPendingCredits();
+      showToast("Crédito registrado correctamente.", "success");
+    } catch (error) {
+      console.error("Error al registrar crédito manual:", error);
+      showToast(
+        normalizeApiError(error, "No se pudo registrar el crédito."),
+        "error"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const sendCreditToCart = async (credit) => {
     try {
       if (!credit.details || credit.details.length === 0) {
@@ -1890,10 +1996,14 @@ function PosPage() {
   };
 
   const filteredProducts = useMemo(() => {
-    const normalizedSearch = searchTerm.toLowerCase().trim();
-    if (!normalizedSearch) return products;
+    const visibleProducts = products.filter(
+      (product) => !isManualCreditProduct(product)
+    );
 
-    return products.filter((product) => {
+    const normalizedSearch = searchTerm.toLowerCase().trim();
+    if (!normalizedSearch) return visibleProducts;
+
+    return visibleProducts.filter((product) => {
       return (
         product.name.toLowerCase().includes(normalizedSearch) ||
         (product.category || "").toLowerCase().includes(normalizedSearch)
@@ -2484,6 +2594,68 @@ function PosPage() {
           </div>
         )}
 
+        {manualCreditModalOpen && (
+          <div className="modal-overlay">
+            <div className="modal-box">
+              <h2>Registrar crédito</h2>
+              <p>Registra dinero que una persona queda debiendo sin agregar productos al carrito.</p>
+
+              <div className="courtesy-reference-box">
+                <label>Nombre o referencia</label>
+                <input
+                  type="text"
+                  value={manualCreditName}
+                  onChange={(e) => setManualCreditName(e.target.value)}
+                  placeholder="Ej. Juan Pérez / Mesa 4"
+                />
+              </div>
+
+              <div className="cash-payment-box">
+                <label>Monto del crédito</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="cash-input"
+                  value={manualCreditAmount}
+                  onChange={(e) => setManualCreditAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="courtesy-reference-box">
+                <label>Descripción opcional</label>
+                <input
+                  type="text"
+                  value={manualCreditDescription}
+                  onChange={(e) => setManualCreditDescription(e.target.value)}
+                  placeholder="Ej. Dinero prestado / cuenta pendiente"
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="modal-cancel-button"
+                  onClick={closeManualCreditModal}
+                  disabled={loading}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  className="modal-confirm-button"
+                  onClick={submitManualCredit}
+                  disabled={loading}
+                >
+                  {loading ? "Guardando..." : "Guardar crédito"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {cashMovementModal.isOpen && (
           <div className="modal-overlay">
             <div className="modal-box">
@@ -2925,6 +3097,10 @@ function PosPage() {
               />
             </div>
           )}
+
+          <button type="button" className="credit-pending-button" onClick={openManualCreditModal}>
+            Registrar crédito
+          </button>
 
           <button type="button" className="credit-pending-button" onClick={loadPendingCredits}>
             Créditos pendientes
