@@ -37,7 +37,7 @@ function AdminPage() {
             to="/admin/ventas"
             className={({ isActive }) => (isActive ? "active" : "")}
           >
-            Ventas
+            Tickets
           </NavLink>
 
           <NavLink className="pos-access-button" to="/pos">

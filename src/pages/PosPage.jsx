@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../services/api";
 import ProductCard from "../components/ProductCard";
 import TablesSidebar from "../components/TablesSidebar";
+import jsPDF from "jspdf";
 
 function PosPage() {
   const [products, setProducts] = useState([]);
@@ -318,6 +319,9 @@ function PosPage() {
     return fallbackMessage;
   };
 
+
+//Funcion ppara crear el PDF
+
   const formatCurrency = (value) => {
     return Number(value || 0).toLocaleString("es-MX", {
       style: "currency",
@@ -325,17 +329,18 @@ function PosPage() {
     });
   };
 
-  const getPaymentMethodIconType = (methodName) => {
-    const name = String(methodName || "").toLowerCase();
+ const getPaymentMethodIconType = (methodName) => {
+  const name = String(methodName || "").toLowerCase();
 
-    if (name.includes("efectivo")) return "cash";
-    if (name.includes("tarjeta")) return "card";
-    if (name.includes("transferencia")) return "transfer";
-    if (name.includes("cortesía") || name.includes("cortesia")) return "courtesy";
-    if (name.includes("crédito") || name.includes("credito")) return "credit";
+  if (name.includes("efectivo")) return "cash";
+  if (name.includes("tarjeta")) return "card";
+  if (name.includes("transferencia")) return "transfer";
+  if (name.includes("cortesía") || name.includes("cortesia")) return "courtesy";
+  if (name.includes("crédito") || name.includes("credito")) return "credit";
+  if (name.includes("hotel")) return "hotel";
 
-    return "default";
-  };
+  return "default";
+};
 
   const getCreditPaymentMethod = () => {
     return paymentMethods.find((method) => {
@@ -423,6 +428,21 @@ function PosPage() {
       );
     }
 
+    if (iconType === "hotel") {
+      return (
+        <span className="payment-method-icon payment-method-icon-hotel">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
+            <path d="M16 9h2a2 2 0 0 1 2 2v10" />
+            <path d="M8 7h2" />
+            <path d="M8 11h2" />
+            <path d="M8 15h2" />
+            <path d="M3 21h18" />
+          </svg>
+        </span>
+      );
+    }
+
     return (
       <span className="payment-method-icon payment-method-icon-default">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -441,12 +461,23 @@ function PosPage() {
     (method) => Number(method.paymentMethodId) === Number(selectedPaymentMethodId)
   );
 
-  const selectedPaymentName = selectedPaymentMethod?.name?.toLowerCase() || "";
-  const isCourtesyPayment = selectedPaymentName === "cortesía" || selectedPaymentName === "cortesia";
-  const isCreditPayment = selectedPaymentName === "crédito" || selectedPaymentName === "credito";
-  const isCashPayment = selectedPaymentName.includes("efectivo");
-  const isPayingPendingCredit = Boolean(sourceCreditSaleId);
-  const requiresPaymentReference = !isPayingPendingCredit && (isCourtesyPayment || isCreditPayment);
+ const selectedPaymentName = selectedPaymentMethod?.name?.toLowerCase() || "";
+
+const isCourtesyPayment =
+  selectedPaymentName === "cortesía" || selectedPaymentName === "cortesia";
+
+const isCreditPayment =
+  selectedPaymentName === "crédito" || selectedPaymentName === "credito";
+
+const isHotelPayment = selectedPaymentName === "hotel";
+
+const isCashPayment = selectedPaymentName.includes("efectivo");
+
+const isPayingPendingCredit = Boolean(sourceCreditSaleId);
+
+const requiresPaymentReference =
+  !isPayingPendingCredit &&
+  (isCourtesyPayment || isCreditPayment || isHotelPayment);
 
   const cashReceivedNumber = Number(cashReceived || 0);
   const cashChange = cashReceivedNumber - cartTotal;
@@ -618,6 +649,7 @@ function PosPage() {
             if (name.includes("transferencia")) return 3;
             if (name.includes("cortesía") || name.includes("cortesia")) return 4;
             if (name.includes("crédito") || name.includes("credito")) return 5;
+            if (name.includes("hotel")) return 6;
             return 99;
           };
 
@@ -1975,7 +2007,16 @@ function PosPage() {
       };
 
       await api.post("/Sales", payload);
-      showToast("Venta registrada correctamente.", "success");
+
+      const successMessage = isHotelPayment
+        ? "Hotel registrado correctamente. Se descuenta inventario y no se registra como efectivo cobrado."
+        : isCourtesyPayment
+        ? "Cortesía registrada correctamente. Se descuenta inventario y no se cobra efectivo."
+        : isCreditPayment
+        ? "Crédito registrado correctamente. Queda como pendiente de pago."
+        : "Venta registrada correctamente.";
+
+      showToast(successMessage, "success");
       await clearCart();
       await Promise.all([
         loadProducts(),
@@ -2597,7 +2638,7 @@ function PosPage() {
         {manualCreditModalOpen && (
           <div className="modal-overlay">
             <div className="modal-box">
-              <h2>Registrar crédito</h2>
+              <h2>Registrar crédito en efectivo</h2>
               <p>Registra dinero que una persona queda debiendo sin agregar productos al carrito.</p>
 
               <div className="courtesy-reference-box">
@@ -2914,6 +2955,7 @@ function PosPage() {
               <button type="button" onClick={loadCashCuts} disabled={loading} title="Ver historial de cortes">
                 Ver cortes
               </button>
+              
             </div>
           </div>
 
@@ -3014,7 +3056,10 @@ function PosPage() {
                 const methodName = (method.name || "").toLowerCase();
                 const methodIsCredit = methodName === "crédito" || methodName === "credito";
                 const methodIsCourtesy = methodName === "cortesía" || methodName === "cortesia";
-                const methodDisabled = isPayingPendingCredit && (methodIsCredit || methodIsCourtesy);
+                const methodIsHotel = methodName === "hotel";
+                const methodDisabled =
+                  isPayingPendingCredit &&
+                  (methodIsCredit || methodIsCourtesy || methodIsHotel);
 
                 return (
                   <button
@@ -3084,23 +3129,30 @@ function PosPage() {
 
           {requiresPaymentReference && (
             <div className="courtesy-reference-box">
-              <label>{isCreditPayment ? "Nombre o referencia del crédito" : "Nombre o motivo de cortesía"}</label>
-              <input
+                <label>
+                  {isCreditPayment
+                    ? "Nombre o referencia del crédito"
+                    : isHotelPayment
+                    ? "Referencia del hotel"
+                    : "Nombre o motivo de cortesía"}
+                </label>              <input
                 type="text"
                 value={paymentReference}
                 onChange={(e) => setPaymentReference(e.target.value)}
                 placeholder={
-                  isCreditPayment
-                    ? "Ej. Juan Pérez / Mesa 3"
-                    : "Ej. Invitación de la casa / Juan Pérez"
-                }
+                    isCreditPayment
+                      ? "Ej. Juan Pérez / Mesa 3"
+                      : isHotelPayment
+                      ? "Ej. Hotel / pedido enviado / responsable"
+                      : "Ej. Invitación de la casa / Juan Pérez"
+}
               />
             </div>
           )}
 
           <button type="button" className="credit-pending-button" onClick={openManualCreditModal}>
-            Registrar crédito
-          </button>
+              Registrar crédito en efectivo         
+               </button>
 
           <button type="button" className="credit-pending-button" onClick={loadPendingCredits}>
             Créditos pendientes

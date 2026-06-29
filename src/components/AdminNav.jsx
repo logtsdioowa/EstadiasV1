@@ -6,7 +6,7 @@ function AdminNav() {
       <Link to="/">Punto de venta</Link>
       <Link to="/inventario">Inventario</Link>
       <Link to="/productos">Productos</Link>
-      <Link to="/ventas">Ventas</Link>
+      <Link to="/ventas">Tickets</Link>
     </nav>
   );
 }
