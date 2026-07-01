@@ -123,6 +123,7 @@ function PosPage() {
       loadCart();
       loadBarTabs();
       loadTableTabs();
+      loadCashBox();
     }, 5000);
 
     return () => clearInterval(interval);
@@ -1065,18 +1066,39 @@ const requiresPaymentReference =
     }
   };
 
+  const normalizeCashBox = (data) => {
+    const currentAmount =
+      data?.currentAmount ??
+      data?.CurrentAmount ??
+      data?.currentBalance ??
+      data?.CurrentBalance ??
+      data?.amount ??
+      data?.Amount ??
+      0;
+
+    return {
+      cashBoxId: data?.cashBoxId ?? data?.CashBoxId ?? data?.id ?? data?.Id ?? null,
+      currentAmount: Number(currentAmount || 0),
+      updatedAt: data?.updatedAt ?? data?.UpdatedAt ?? new Date().toISOString(),
+    };
+  };
+
   const loadCashBox = async () => {
     try {
-      const response = await api.get("/CashBox");
+      // Se agrega parámetro temporal para evitar que el navegador/IIS regrese una respuesta anterior.
+      const response = await api.get(`/CashBox?_=${Date.now()}`);
+      const normalizedCashBox = normalizeCashBox(response.data || {});
 
-      setCashBox({
-        cashBoxId: response.data.cashBoxId ?? response.data.CashBoxId,
-        currentAmount: response.data.currentAmount ?? response.data.CurrentAmount ?? 0,
-        updatedAt: response.data.updatedAt ?? response.data.UpdatedAt ?? null,
-      });
+      setCashBox(normalizedCashBox);
+      return normalizedCashBox;
     } catch (error) {
       console.error("Error al cargar caja:", error);
-      showToast("No se pudo cargar la caja.", "error");
+
+      if (!cashBox) {
+        showToast("No se pudo cargar la caja.", "error");
+      }
+
+      return null;
     }
   };
 
@@ -1678,13 +1700,16 @@ const requiresPaymentReference =
     }
   };
 
-  const clearCart = async () => {
+  const clearCart = async (showSuccessMessage = true) => {
     try {
       await api.delete("/ActiveCart/Clear");
       await loadCart();
       setSourceCreditSaleId(null);
       setSourceCreditReference("");
-      showToast("Carrito vaciado correctamente.", "success");
+
+      if (showSuccessMessage) {
+        showToast("Carrito vaciado correctamente.", "success");
+      }
     } catch (error) {
       console.error("Error al vaciar carrito:", error);
       showToast("No se pudo vaciar el carrito.", "error");
@@ -2006,7 +2031,29 @@ const requiresPaymentReference =
         })),
       };
 
+      const shouldIncreaseCashBox =
+        isCashPayment && !isCourtesyPayment && !isCreditPayment && !isHotelPayment;
+
+      const saleAmountForCashBox = cleanedCart.reduce(
+        (total, item) => total + Number(item.subtotal || 0),
+        0
+      );
+
       await api.post("/Sales", payload);
+
+      // Actualización visual inmediata de la tarjeta existente de Caja actual.
+      // Después se vuelve a consultar la API para dejar el monto real del servidor.
+      if (shouldIncreaseCashBox) {
+        setCashBox((previousCashBox) => {
+          if (!previousCashBox) return previousCashBox;
+
+          return {
+            ...previousCashBox,
+            currentAmount: Number(previousCashBox.currentAmount || 0) + saleAmountForCashBox,
+            updatedAt: new Date().toISOString(),
+          };
+        });
+      }
 
       const successMessage = isHotelPayment
         ? "Hotel registrado correctamente. Se descuenta inventario y no se registra como efectivo cobrado."
@@ -2017,13 +2064,21 @@ const requiresPaymentReference =
         : "Venta registrada correctamente.";
 
       showToast(successMessage, "success");
-      await clearCart();
+
+      await clearCart(false);
+
       await Promise.all([
         loadProducts(),
         loadBeers(),
         loadBottleBases(),
         loadCashBox(),
       ]);
+
+      // Refresco adicional breve para cubrir pequeños retrasos del servidor/API después de guardar la venta.
+      setTimeout(() => {
+        loadCashBox();
+      }, 700);
+
       setCashReceived("");
       setPaymentReference("");
       setSourceCreditSaleId(null);
@@ -2940,7 +2995,9 @@ const requiresPaymentReference =
 
           <div className="cashbox-sidebar-card">
             <span>Caja actual</span>
-            <strong>{formatCurrency(cashBox?.currentAmount || 0)}</strong>
+            <strong>
+              {cashBox ? formatCurrency(cashBox.currentAmount) : "Cargando..."}
+            </strong>
 
             <div className="cashbox-actions cashbox-actions-four">
               <button type="button" onClick={() => openCashMovementModal("add")} disabled={loading}>
