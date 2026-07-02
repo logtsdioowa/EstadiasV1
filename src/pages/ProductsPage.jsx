@@ -136,6 +136,16 @@ function ProductsPage() {
     );
   };
 
+  const cleanBottleName = (name) => {
+    const value = String(name || "").trim();
+
+    if (normalizeText(value).startsWith("botella ")) {
+      return value.replace(/^botella\s+/i, "").trim();
+    }
+
+    return value;
+  };
+
   const productCategoriesList = categoriesList.filter(
     (category) => !isBottleCategoryName(category.name)
   );
@@ -1076,38 +1086,20 @@ function ProductsPage() {
     try {
       const uploadedImageUrl = await uploadBottleImage();
 
-      if (editingProductId) {
-        const updatePayload = {
-          name: bottleForm.name.trim(),
-          description: bottleForm.description || "",
-          categoryId: Number(bottleForm.bottleCategoryId),
-          price: 0,
-          productType: "BOTTLE",
-          trackInventory: true,
-          stock: Number(bottleForm.initialBottleStock || 0),
-          minStock: 0,
-          bottleVolumeMl: Number(bottleForm.bottleVolumeMl || 0),
-          servingVolumeMl: null,
-          inventorySourceProductId: null,
-          inventoryMultiplier: 1,
-          requiresBeerSelection: false,
-          isBeer: false,
-          imageUrl: uploadedImageUrl || bottleForm.imageUrl || "",
-        };
+      const bottlePayload = {
+        name: cleanBottleName(bottleForm.name),
+        description: bottleForm.description || "",
+        bottleCategoryId: Number(bottleForm.bottleCategoryId),
+        initialBottleStock: Number(bottleForm.initialBottleStock || 0),
+        bottleVolumeMl: Number(bottleForm.bottleVolumeMl || 0),
+        imageUrl: uploadedImageUrl || bottleForm.imageUrl || "",
+      };
 
-        await api.put(`/Products/Bottles/${editingProductId}`, updatePayload);
+      if (editingProductId) {
+        await api.put(`/Products/Bottles/${editingProductId}`, bottlePayload);
         showToast("Botella actualizada correctamente.", "success");
       } else {
-        const createPayload = {
-          name: bottleForm.name.trim(),
-          description: bottleForm.description || "",
-          bottleCategoryId: Number(bottleForm.bottleCategoryId),
-          initialBottleStock: Number(bottleForm.initialBottleStock || 0),
-          bottleVolumeMl: Number(bottleForm.bottleVolumeMl || 0),
-          imageUrl: uploadedImageUrl || "",
-        };
-
-        await api.post("/Products/Bottle", createPayload);
+        await api.post("/Products/Bottle", bottlePayload);
         showToast("Botella e inventario base creados correctamente.", "success");
       }
 
@@ -1122,8 +1114,10 @@ function ProductsPage() {
           : "Error al crear botella:",
         error
       );
-      console.log("Respuesta backend:", error.response?.data);
-
+console.log(
+  "Respuesta backend:",
+  JSON.stringify(error.response?.data, null, 2)
+);
       showToast(
         normalizeApiError(
           error,
@@ -1146,10 +1140,10 @@ function ProductsPage() {
     setEditingProductId(product.productId);
 
     setBottleForm({
-      name: product.name || "",
+      name: cleanBottleName(product.name || ""),
       description: product.description || "",
       bottleCategoryId: category ? category.categoryId : "",
-      initialBottleStock: product.stock ?? 0,
+      initialBottleStock: product.baseStock ?? product.stock ?? 0,
       bottleVolumeMl: product.bottleVolumeMl ?? "1000",
       imageUrl: product.imageUrl || "",
     });
