@@ -2025,6 +2025,8 @@ const requiresPaymentReference =
           quantity: item.quantity,
           customUnitPrice: item.unitPrice,
           productDrinkSizeId: item.productDrinkSizeId || null,
+          drinkSizeName: item.drinkSizeName || null,
+          ouncesUsed: item.ouncesUsed || null,
           selectedBeerProductId: item.selectedBeerProductId || null,
           selectedBottleProductId: item.selectedBottleProductId || null,
           totalMinutes: item.totalMinutes || null,
